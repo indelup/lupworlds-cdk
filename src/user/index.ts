@@ -1,11 +1,4 @@
-//exports.handler = async (_event: any) => {
-//    return {
-//        statusCode: 200,
-//        body: JSON.stringify("Hello from Lambda!"),
-//    };
-//};
-
-// User Handler
+// Lupworlds API Handler - Users Module
 const ddb = require('@aws-sdk/client-dynamodb');
 const client = new ddb.DynamoDBClient({ region: process.env.AWS_REGION });
 
@@ -68,8 +61,8 @@ async function getUser(userId: string): Promise<User> {
             id: data.Item.id.S,
             twitchId: data.Item.twitchId.S,
             alias: data.Item.alias.S,
-            allowedRoles: data.Item.allowedRoles.SS,
-            worldIds: data.Item.worldIds.SS
+            allowedRoles: data.Item.allowedRoles.L.map((item: any) => item.S),
+            worldIds: data.Item.worldIds.L.map((item: any) => item.S).filter((id: string) => id !== '')
         };
     } catch (e) {
         console.log(`Failed Dynamodb processing: ${JSON.stringify(e)}`);
@@ -88,8 +81,8 @@ async function listUsers(): Promise<User[]> {
             id: item.id.S,
             twitchId: item.twitchId.S,
             alias: item.alias.S,
-            allowedRoles: item.allowedRoles.SS,
-            worldIds: item.worldIds.SS
+            allowedRoles: item.allowedRoles.L.map((item: any) => item.S),
+            worldIds: item.worldIds.L.map((item: any) => item.S).filter((id: string) => id !== '')
         }));
     } catch (e) {
         console.log(`Failed Dynamodb processing: ${JSON.stringify(e)}`);
@@ -99,15 +92,18 @@ async function listUsers(): Promise<User[]> {
 
 async function createUser(user: Omit<User, 'id'>): Promise<string> {
     try {
-        const newId = `usr${Date.now()}`;
+        // Date.now() returns milliseconds since Unix Epoch (Jan 1, 1970 00:00:00 UTC)
+        // This is always in UTC, regardless of the server's timezone
+        const timestamp = Date.now();
+        const newId = `usr${timestamp}`;
         const command = new ddb.PutItemCommand({
             TableName: userTableName,
             Item: {
                 'id': { S: newId },
                 'twitchId': { S: user.twitchId },
                 'alias': { S: user.alias },
-                'allowedRoles': { SS: user.allowedRoles },
-                'worldIds': { SS: user.worldIds?.length > 0 ? user.worldIds : [''] }
+                'allowedRoles': { L: user.allowedRoles.map(role => ({ S: role })) },
+                'worldIds': { L: (user.worldIds && user.worldIds.length > 0 ? user.worldIds : []).map(id => ({ S: id })) }
             }
         });
 

@@ -18,9 +18,10 @@ export class LupworldsCdkStack extends cdk.Stack {
                 type: ddb.AttributeType.STRING,
             },
             removalPolicy: cdk.RemovalPolicy.DESTROY,
+            tableName: "lupworlds-users"
         }
 
-        const userApparatus = new LambdaToDynamoDB(this, "UserApparatus", {
+        const usersService = new LambdaToDynamoDB(this, "UsersService", {
             lambdaFunctionProps: {
                 runtime: lambda.Runtime.NODEJS_22_X,
                 handler: "index.handler",
@@ -29,20 +30,20 @@ export class LupworldsCdkStack extends cdk.Stack {
             dynamoTableProps: simpleTableProps,
         });
 
-        const userApi = new OpenApiGatewayToLambda(this, "UserOpenApiGatewayToLambda", {
+        const userApi = new OpenApiGatewayToLambda(this, "LupworldsApi", {
             apiDefinitionAsset: new Asset(this, 'ApiDefinitionAsset', {
                 path: path.join("openapi", "users-api.yaml"),
             }),
             apiIntegrations: [
                 {
-                    id: "UserHandler",
-                    existingLambdaObj: userApparatus.lambdaFunction
+                    id: "UsersHandler",
+                    existingLambdaObj: usersService.lambdaFunction
                 }
             ]
         });
 
-        new cdk.CfnOutput(this, "UserUrl", {
-            value: userApi.apiGateway.url + "users",
+        new cdk.CfnOutput(this, "ApiUrl", {
+            value: userApi.apiGateway.url,
         });      
 
         // Defines Lambda function resource

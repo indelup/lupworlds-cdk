@@ -1,8 +1,8 @@
 openapi: 3.0.0
 info:
-  title: Users API
+  title: Lupworlds API
   version: '1.0.0'
-  description: 'API for managing users with IAM authorization'
+  description: 'General purpose API for Lupworlds platform with IAM authorization'
 
 paths:
   /users:
@@ -14,7 +14,7 @@ paths:
       description: Creates a new user with the provided information
       x-amazon-apigateway-integration:
         httpMethod: POST
-        uri: UserHandler
+        uri: UsersHandler
         passthroughBehavior: when_no_match
         type: aws_proxy
       requestBody:
@@ -41,7 +41,7 @@ paths:
       description: Returns a list of all users
       x-amazon-apigateway-integration:
         httpMethod: POST
-        uri: UserHandler
+        uri: UsersHandler
         passthroughBehavior: when_no_match
         type: aws_proxy
       responses:
@@ -69,7 +69,7 @@ paths:
             type: string
       x-amazon-apigateway-integration:
         httpMethod: POST
-        uri: UserHandler
+        uri: UsersHandler
         passthroughBehavior: when_no_match
         type: aws_proxy
         requestParameters:

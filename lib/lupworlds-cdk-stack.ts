@@ -1,73 +1,50 @@
 import * as cdk from "aws-cdk-lib";
 import { Construct } from "constructs";
-// import * as sqs from 'aws-cdk-lib/aws-sqs';
 import * as lambda from "aws-cdk-lib/aws-lambda";
-import { OpenApiGatewayToLambda } from '@aws-solutions-constructs/aws-openapigateway-lambda';
-import { LambdaToDynamoDB } from '@aws-solutions-constructs/aws-lambda-dynamodb';
-import { Asset } from 'aws-cdk-lib/aws-s3-assets';
-import * as path from 'path';
-import * as ddb from 'aws-cdk-lib/aws-dynamodb';
+import { NodejsFunction } from "aws-cdk-lib/aws-lambda-nodejs";
+import { LambdaRestApi } from "aws-cdk-lib/aws-apigateway";
+import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
+import * as s3 from "aws-cdk-lib/aws-s3";
 
 export class LupworldsCdkStack extends cdk.Stack {
     constructor(scope: Construct, id: string, props?: cdk.StackProps) {
         super(scope, id, props);
 
-        const simpleTableProps = {
+        const charactersTable = new dynamodb.Table(this, "CharactersTable", {
+            tableName: "Characters",
             partitionKey: {
                 name: "id",
-                type: ddb.AttributeType.STRING,
+                type: dynamodb.AttributeType.STRING,
             },
-            removalPolicy: cdk.RemovalPolicy.DESTROY,
-            tableName: "lupworlds-users"
-        }
-
-        const usersService = new LambdaToDynamoDB(this, "UsersService", {
-            lambdaFunctionProps: {
-                runtime: lambda.Runtime.NODEJS_22_X,
-                handler: "index.handler",
-                code: lambda.Code.fromAsset("src/user"),
-            },
-            dynamoTableProps: simpleTableProps,
+            removalPolicy: cdk.RemovalPolicy.DESTROY, // DEV only
         });
 
-        const userApi = new OpenApiGatewayToLambda(this, "LupworldsApi", {
-            apiDefinitionAsset: new Asset(this, 'ApiDefinitionAsset', {
-                path: path.join("openapi", "users-api.yaml"),
-            }),
-            apiIntegrations: [
-                {
-                    id: "UsersHandler",
-                    existingLambdaObj: usersService.lambdaFunction
-                }
-            ]
+        const characterImagesBucket = new s3.Bucket(
+            this,
+            "CharacterImagesBucket",
+            {
+                removalPolicy: cdk.RemovalPolicy.DESTROY, // DEV only
+                autoDeleteObjects: true, // DEV only
+            },
+        );
+
+        const apiLambda = new NodejsFunction(this, "LupworldsLambda", {
+            entry: "apiProxyLambda/index.ts",
+            handler: "handler",
+            runtime: lambda.Runtime.NODEJS_22_X,
+            functionName: "LupworldsLambda",
+            environment: {
+                CHARACTERS_TABLE_NAME: charactersTable.tableName,
+                CHARACTER_IMAGES_BUCKET_NAME: characterImagesBucket.bucketName,
+            },
         });
 
-        new cdk.CfnOutput(this, "ApiUrl", {
-            value: userApi.apiGateway.url,
-        });      
+        charactersTable.grantReadWriteData(apiLambda);
+        characterImagesBucket.grantReadWrite(apiLambda);
 
-        // Defines Lambda function resource
-        //const handleUserRequest = new lambda.Function(
-        //    this,
-        //    "HandleUserRequest",
-        //    {
-        //        code: lambda.Code.fromAsset("src/user"),
-        //        handler: "index.handler",
-        //        runtime: lambda.Runtime.NODEJS_22_X,
-        //    },
-        //);
-
-        //const userHandlerUrl = handleUserRequest.addFunctionUrl({
-        //    authType: lambda.FunctionUrlAuthType.NONE,
-        //});
-
-        //  new cdk.CfnOutput(this, "userHandlerUrl", {
-        //    value: userHandlerUrl.url,
-        //});
-
-        // example resource
-        // const queue = new sqs.Queue(this, 'LupworldsCdkQueue', {
-        //   visibilityTimeout: cdk.Duration.seconds(300)
-        // });
+        new LambdaRestApi(this, "LupworldsRestAPI", {
+            handler: apiLambda,
+            proxy: true,
+        });
     }
 }

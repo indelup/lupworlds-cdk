@@ -10,6 +10,15 @@ export class LupworldsCdkStack extends cdk.Stack {
     constructor(scope: Construct, id: string, props?: cdk.StackProps) {
         super(scope, id, props);
 
+        const usersTable = new dynamodb.Table(this, "UsersTable", {
+            tableName: "Users",
+            partitionKey: {
+                name: "id",
+                type: dynamodb.AttributeType.STRING,
+            },
+            removalPolicy: cdk.RemovalPolicy.DESTROY, // DEV only
+        });
+
         const charactersTable = new dynamodb.Table(this, "CharactersTable", {
             tableName: "Characters",
             partitionKey: {
@@ -36,11 +45,13 @@ export class LupworldsCdkStack extends cdk.Stack {
             environment: {
                 CHARACTERS_TABLE_NAME: charactersTable.tableName,
                 CHARACTER_IMAGES_BUCKET_NAME: characterImagesBucket.bucketName,
+                USERS_TABLE_NAME: usersTable.tableName,
             },
         });
 
         charactersTable.grantReadWriteData(apiLambda);
         characterImagesBucket.grantReadWrite(apiLambda);
+        usersTable.grantReadWriteData(apiLambda);
 
         new LambdaRestApi(this, "LupworldsRestAPI", {
             handler: apiLambda,

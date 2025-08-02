@@ -4,6 +4,7 @@ import {
     DynamoDBDocumentClient,
     ScanCommand,
     PutCommand,
+    QueryCommand,
 } from "@aws-sdk/lib-dynamodb";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
@@ -21,15 +22,27 @@ app.get("/", async (c) => {
     if (!tableName) {
         return c.json({ error: "Table name not configured" }, 500);
     }
+
+    const worldId = c.req.query("worldId");
+
+    if (!worldId) {
+        return c.json({ error: "worldId parameter is required" }, 400);
+    }
+
     try {
-        const command = new ScanCommand({
+        const command = new QueryCommand({
             TableName: tableName,
+            IndexName: "WorldIdIndex", // You'll need to create this GSI
+            KeyConditionExpression: "worldId = :worldId",
+            ExpressionAttributeValues: {
+                ":worldId": worldId,
+            },
         });
         const response = await ddbDocClient.send(command);
         return c.json(response.Items);
-    } catch (error) {
+    } catch (error: any) {
         console.error(error);
-        return c.json({ error: "Could not fetch characters" }, 500);
+        return c.json({ error: error.message }, 500);
     }
 });
 
@@ -40,8 +53,8 @@ app.post("/", async (c) => {
     try {
         const body = await c.req.json();
         const newCharacter = {
-            id: randomUUID(),
             ...body,
+            id: randomUUID(),
         };
         const command = new PutCommand({
             TableName: tableName,
@@ -49,9 +62,9 @@ app.post("/", async (c) => {
         });
         await ddbDocClient.send(command);
         return c.json(newCharacter, 201);
-    } catch (error) {
+    } catch (error: any) {
         console.error(error);
-        return c.json({ error: "Could not create character" }, 500);
+        return c.json({ error: error.message }, 500);
     }
 });
 

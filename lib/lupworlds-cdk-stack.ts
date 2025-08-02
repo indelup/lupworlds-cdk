@@ -28,12 +28,38 @@ export class LupworldsCdkStack extends cdk.Stack {
             removalPolicy: cdk.RemovalPolicy.DESTROY, // DEV only
         });
 
+        // Add GSI for querying by worldId
+        charactersTable.addGlobalSecondaryIndex({
+            indexName: "WorldIdIndex",
+            partitionKey: {
+                name: "worldId",
+                type: dynamodb.AttributeType.STRING,
+            },
+            projectionType: dynamodb.ProjectionType.ALL,
+        });
+
         const characterImagesBucket = new s3.Bucket(
             this,
             "CharacterImagesBucket",
             {
                 removalPolicy: cdk.RemovalPolicy.DESTROY, // DEV only
                 autoDeleteObjects: true, // DEV only
+                publicReadAccess: true,
+                blockPublicAccess: s3.BlockPublicAccess.BLOCK_ACLS_ONLY,
+                cors: [
+                    {
+                        allowedMethods: [
+                            s3.HttpMethods.GET,
+                            s3.HttpMethods.PUT,
+                            s3.HttpMethods.POST,
+                            s3.HttpMethods.DELETE,
+                        ],
+                        allowedOrigins: ["*"], // Update for production
+                        allowedHeaders: ["*"],
+                        exposedHeaders: ["ETag"],
+                        maxAge: 3000,
+                    },
+                ],
             },
         );
 

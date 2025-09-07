@@ -28,8 +28,26 @@ export class LupworldsCdkStack extends cdk.Stack {
             removalPolicy: cdk.RemovalPolicy.DESTROY, // DEV only
         });
 
+        const materialsTable = new dynamodb.Table(this, "MaterialsTable", {
+            tableName: "Materials",
+            partitionKey: {
+                name: "id",
+                type: dynamodb.AttributeType.STRING,
+            },
+            removalPolicy: cdk.RemovalPolicy.DESTROY, // DEV only
+        });
+
         // Add GSI for querying by worldId
         charactersTable.addGlobalSecondaryIndex({
+            indexName: "WorldIdIndex",
+            partitionKey: {
+                name: "worldId",
+                type: dynamodb.AttributeType.STRING,
+            },
+            projectionType: dynamodb.ProjectionType.ALL,
+        });
+
+        materialsTable.addGlobalSecondaryIndex({
             indexName: "WorldIdIndex",
             partitionKey: {
                 name: "worldId",
@@ -41,6 +59,31 @@ export class LupworldsCdkStack extends cdk.Stack {
         const characterImagesBucket = new s3.Bucket(
             this,
             "CharacterImagesBucket",
+            {
+                removalPolicy: cdk.RemovalPolicy.DESTROY, // DEV only
+                autoDeleteObjects: true, // DEV only
+                publicReadAccess: true,
+                blockPublicAccess: s3.BlockPublicAccess.BLOCK_ACLS_ONLY,
+                cors: [
+                    {
+                        allowedMethods: [
+                            s3.HttpMethods.GET,
+                            s3.HttpMethods.PUT,
+                            s3.HttpMethods.POST,
+                            s3.HttpMethods.DELETE,
+                        ],
+                        allowedOrigins: ["*"], // Update for production
+                        allowedHeaders: ["*"],
+                        exposedHeaders: ["ETag"],
+                        maxAge: 3000,
+                    },
+                ],
+            },
+        );
+
+        const materialImagesBucket = new s3.Bucket(
+            this,
+            "MaterialImagesBucket",
             {
                 removalPolicy: cdk.RemovalPolicy.DESTROY, // DEV only
                 autoDeleteObjects: true, // DEV only
@@ -75,9 +118,11 @@ export class LupworldsCdkStack extends cdk.Stack {
             },
         });
 
+        usersTable.grantReadWriteData(apiLambda);
         charactersTable.grantReadWriteData(apiLambda);
         characterImagesBucket.grantReadWrite(apiLambda);
-        usersTable.grantReadWriteData(apiLambda);
+        materialsTable.grantReadWriteData(apiLambda);
+        materialImagesBucket.grantReadWrite(apiLambda);
 
         new LambdaRestApi(this, "LupworldsRestAPI", {
             handler: apiLambda,

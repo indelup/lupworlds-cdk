@@ -2,7 +2,6 @@ import { Hono } from "hono";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import {
     DynamoDBDocumentClient,
-    ScanCommand,
     PutCommand,
     QueryCommand,
     GetCommand,

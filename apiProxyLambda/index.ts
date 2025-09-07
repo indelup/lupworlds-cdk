@@ -1,8 +1,9 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { handle } from "hono/aws-lambda";
-import characters from "./resources/characters";
 import users from "./resources/users";
+import characters from "./resources/characters";
+import materials from "./resources/materials";
 
 const app = new Hono();
 
@@ -18,7 +19,8 @@ app.use(
     }),
 );
 
-app.route("/characters", characters);
 app.route("/users", users);
+app.route("/characters", characters);
+app.route("/materials", materials);
 
 export const handler = handle(app);

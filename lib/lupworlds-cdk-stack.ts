@@ -114,6 +114,8 @@ export class LupworldsCdkStack extends cdk.Stack {
             environment: {
                 CHARACTERS_TABLE_NAME: charactersTable.tableName,
                 CHARACTER_IMAGES_BUCKET_NAME: characterImagesBucket.bucketName,
+                MATERIALS_TABLE_NAME: materialsTable.tableName,
+                MATERIALS_IMAGES_BUCKET_NAME: materialImagesBucket.bucketName,
                 USERS_TABLE_NAME: usersTable.tableName,
             },
         });

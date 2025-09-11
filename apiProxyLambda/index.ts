@@ -4,6 +4,7 @@ import { handle } from "hono/aws-lambda";
 import users from "./resources/users";
 import characters from "./resources/characters";
 import materials from "./resources/materials";
+import banners from "./resources/banners";
 
 const app = new Hono();
 
@@ -22,5 +23,6 @@ app.use(
 app.route("/users", users);
 app.route("/characters", characters);
 app.route("/materials", materials);
+app.route("/banners", banners);
 
 export const handler = handle(app);

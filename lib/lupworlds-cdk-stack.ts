@@ -37,6 +37,14 @@ export class LupworldsCdkStack extends cdk.Stack {
             removalPolicy: cdk.RemovalPolicy.DESTROY, // DEV only
         });
 
+        const bannersTable = new dynamodb.Table(this, "BannersTable", {
+            tableName: "Banners",
+            partitionKey: {
+                name: "id",
+                type: dynamodb.AttributeType.STRING,
+            },
+        });
+
         // Add GSI for querying by worldId
         charactersTable.addGlobalSecondaryIndex({
             indexName: "WorldIdIndex",
@@ -48,6 +56,15 @@ export class LupworldsCdkStack extends cdk.Stack {
         });
 
         materialsTable.addGlobalSecondaryIndex({
+            indexName: "WorldIdIndex",
+            partitionKey: {
+                name: "worldId",
+                type: dynamodb.AttributeType.STRING,
+            },
+            projectionType: dynamodb.ProjectionType.ALL,
+        });
+
+        bannersTable.addGlobalSecondaryIndex({
             indexName: "WorldIdIndex",
             partitionKey: {
                 name: "worldId",
@@ -106,6 +123,27 @@ export class LupworldsCdkStack extends cdk.Stack {
             },
         );
 
+        const bannerImagesBucket = new s3.Bucket(this, "BannerImagesBucket", {
+            removalPolicy: cdk.RemovalPolicy.DESTROY, // DEV only
+            autoDeleteObjects: true, // DEV only
+            publicReadAccess: true,
+            blockPublicAccess: s3.BlockPublicAccess.BLOCK_ACLS_ONLY,
+            cors: [
+                {
+                    allowedMethods: [
+                        s3.HttpMethods.GET,
+                        s3.HttpMethods.PUT,
+                        s3.HttpMethods.POST,
+                        s3.HttpMethods.DELETE,
+                    ],
+                    allowedOrigins: ["*"], // Update for production
+                    allowedHeaders: ["*"],
+                    exposedHeaders: ["ETag"],
+                    maxAge: 3000,
+                },
+            ],
+        });
+
         const apiLambda = new NodejsFunction(this, "LupworldsLambda", {
             entry: "apiProxyLambda/index.ts",
             handler: "handler",
@@ -125,6 +163,8 @@ export class LupworldsCdkStack extends cdk.Stack {
         characterImagesBucket.grantReadWrite(apiLambda);
         materialsTable.grantReadWriteData(apiLambda);
         materialImagesBucket.grantReadWrite(apiLambda);
+        bannersTable.grantReadWriteData(apiLambda);
+        bannerImagesBucket.grantReadWrite(apiLambda);
 
         new LambdaRestApi(this, "LupworldsRestAPI", {
             handler: apiLambda,

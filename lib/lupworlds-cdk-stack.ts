@@ -2,13 +2,22 @@ import * as cdk from "aws-cdk-lib";
 import { Construct } from "constructs";
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import { NodejsFunction } from "aws-cdk-lib/aws-lambda-nodejs";
-import { LambdaRestApi } from "aws-cdk-lib/aws-apigateway";
+import { LambdaRestApi, RestApi, LambdaIntegration } from "aws-cdk-lib/aws-apigateway";
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 import * as s3 from "aws-cdk-lib/aws-s3";
 
 export class LupworldsCdkStack extends cdk.Stack {
     constructor(scope: Construct, id: string, props?: cdk.StackProps) {
         super(scope, id, props);
+
+        // Helper function para obtener variables de entorno
+        const getEnvVar = (key: string, defaultValue?: string): string => {
+            const value = process.env[key];
+            if (!value && !defaultValue) {
+                throw new Error(`Environment variable ${key} is required`);
+            }
+            return value || defaultValue!;
+        };
 
         const usersTable = new dynamodb.Table(this, "UsersTable", {
             tableName: "Users",
@@ -150,6 +159,7 @@ export class LupworldsCdkStack extends cdk.Stack {
             runtime: lambda.Runtime.NODEJS_22_X,
             functionName: "LupworldsLambda",
             environment: {
+                JWT_SECRET: getEnvVar("JWT_SECRET"),
                 CHARACTERS_TABLE_NAME: charactersTable.tableName,
                 CHARACTER_IMAGES_BUCKET_NAME: characterImagesBucket.bucketName,
                 MATERIALS_TABLE_NAME: materialsTable.tableName,
@@ -160,7 +170,24 @@ export class LupworldsCdkStack extends cdk.Stack {
             },
         });
 
+        // Lambda de autenticación
+        const authLambda = new NodejsFunction(this, "AuthLambda", {
+            entry: "authLambda/index.ts",
+            handler: "handler",
+            runtime: lambda.Runtime.NODEJS_22_X,
+            functionName: "LupworldsAuthLambda",
+            environment: {
+                TWITCH_CLIENT_ID: getEnvVar("TWITCH_CLIENT_ID"),
+                TWITCH_CLIENT_SECRET: getEnvVar("TWITCH_CLIENT_SECRET"),
+                TWITCH_REDIRECT_URI: getEnvVar("TWITCH_REDIRECT_URI", "http://localhost:8080/auth/callback"),
+                JWT_SECRET: getEnvVar("JWT_SECRET"),
+                USERS_TABLE_NAME: usersTable.tableName,
+                FRONTEND_URL: getEnvVar("FRONTEND_URL", "http://localhost:8080"),
+            },
+        });
+
         usersTable.grantReadWriteData(apiLambda);
+        usersTable.grantReadWriteData(authLambda);
         charactersTable.grantReadWriteData(apiLambda);
         characterImagesBucket.grantReadWrite(apiLambda);
         materialsTable.grantReadWriteData(apiLambda);
@@ -168,9 +195,34 @@ export class LupworldsCdkStack extends cdk.Stack {
         bannersTable.grantReadWriteData(apiLambda);
         bannerImagesBucket.grantReadWrite(apiLambda);
 
+        // API Gateway para autenticación
+        const authApi = new RestApi(this, "AuthApi", {
+            restApiName: "Lupworlds Auth Service",
+            description: "Authentication service for Lupworlds",
+            defaultCorsPreflightOptions: {
+                allowOrigins: [getEnvVar("FRONTEND_URL", "http://localhost:8080")],
+                allowMethods: ["GET", "POST", "OPTIONS"],
+                allowHeaders: ["Content-Type"],
+                allowCredentials: true, // IMPORTANTE para cookies
+                maxAge: cdk.Duration.days(1),
+            },
+        });
+
+        authApi.root.addResource("auth").addMethod("GET", new LambdaIntegration(authLambda));
+        authApi.root.addResource("callback").addMethod("GET", new LambdaIntegration(authLambda));
+        authApi.root.addResource("logout").addMethod("POST", new LambdaIntegration(authLambda));
+
+        // API Gateway principal con CORS para cookies
         new LambdaRestApi(this, "LupworldsRestAPI", {
             handler: apiLambda,
             proxy: true,
+            defaultCorsPreflightOptions: {
+                allowOrigins: [getEnvVar("FRONTEND_URL", "http://localhost:8080")],
+                allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+                allowHeaders: ["Content-Type", "Authorization"],
+                allowCredentials: true, // IMPORTANTE para cookies
+                maxAge: cdk.Duration.days(1),
+            },
         });
     }
 }

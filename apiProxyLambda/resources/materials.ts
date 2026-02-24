@@ -60,6 +60,7 @@ app.post("/", async (c) => {
         const newCharacter = {
             ...body,
             id: randomUUID(),
+            createdAt: new Date().toISOString(),
         };
         const command = new PutCommand({
             TableName: tableName,

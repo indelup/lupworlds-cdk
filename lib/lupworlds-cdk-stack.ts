@@ -45,6 +45,23 @@ export class LupworldsCdkStack extends cdk.Stack {
             },
         });
 
+        const playerWorldDataTable = new dynamodb.Table(
+            this,
+            "PlayerWorldDataTable",
+            {
+                tableName: "PlayerWorldData",
+                partitionKey: {
+                    name: "userId",
+                    type: dynamodb.AttributeType.STRING,
+                },
+                sortKey: {
+                    name: "worldId",
+                    type: dynamodb.AttributeType.STRING,
+                },
+                removalPolicy: cdk.RemovalPolicy.DESTROY, // DEV only
+            },
+        );
+
         // Add GSI for querying by worldId
         charactersTable.addGlobalSecondaryIndex({
             indexName: "WorldIdIndex",
@@ -157,6 +174,7 @@ export class LupworldsCdkStack extends cdk.Stack {
                 USERS_TABLE_NAME: usersTable.tableName,
                 BANNERS_TABLE_NAME: bannersTable.tableName,
                 BANNER_IMAGES_BUCKET_NAME: bannerImagesBucket.bucketName,
+                PLAYER_WORLD_DATA_TABLE_NAME: playerWorldDataTable.tableName,
             },
         });
 
@@ -167,6 +185,7 @@ export class LupworldsCdkStack extends cdk.Stack {
         materialImagesBucket.grantReadWrite(apiLambda);
         bannersTable.grantReadWriteData(apiLambda);
         bannerImagesBucket.grantReadWrite(apiLambda);
+        playerWorldDataTable.grantReadWriteData(apiLambda);
 
         new LambdaRestApi(this, "LupworldsRestAPI", {
             handler: apiLambda,

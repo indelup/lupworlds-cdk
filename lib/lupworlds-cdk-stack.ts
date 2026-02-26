@@ -62,6 +62,16 @@ export class LupworldsCdkStack extends cdk.Stack {
             },
         );
 
+        // Add GSI for querying by twitchId
+        usersTable.addGlobalSecondaryIndex({
+            indexName: "TwitchIdIndex",
+            partitionKey: {
+                name: "twitchId",
+                type: dynamodb.AttributeType.STRING,
+            },
+            projectionType: dynamodb.ProjectionType.ALL,
+        });
+
         // Add GSI for querying by worldId
         charactersTable.addGlobalSecondaryIndex({
             indexName: "WorldIdIndex",

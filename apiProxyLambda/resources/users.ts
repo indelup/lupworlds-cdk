@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import {
     DynamoDBDocumentClient,
-    ScanCommand,
+    QueryCommand,
     PutCommand,
 } from "@aws-sdk/lib-dynamodb";
 import { randomUUID } from "crypto";
@@ -20,9 +20,10 @@ app.get("/:twitchId", async (c) => {
     }
     const twitchId = c.req.param("twitchId");
     try {
-        const command = new ScanCommand({
+        const command = new QueryCommand({
             TableName: tableName,
-            FilterExpression: "twitchId = :twitchId",
+            IndexName: "TwitchIdIndex",
+            KeyConditionExpression: "twitchId = :twitchId",
             ExpressionAttributeValues: {
                 ":twitchId": twitchId,
             },

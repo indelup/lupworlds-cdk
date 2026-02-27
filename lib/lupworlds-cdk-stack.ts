@@ -45,6 +45,15 @@ export class LupworldsCdkStack extends cdk.Stack {
             },
         });
 
+        const worldsTable = new dynamodb.Table(this, "WorldsTable", {
+            tableName: "Worlds",
+            partitionKey: {
+                name: "id",
+                type: dynamodb.AttributeType.STRING,
+            },
+            removalPolicy: cdk.RemovalPolicy.DESTROY, // DEV only
+        });
+
         const playerWorldDataTable = new dynamodb.Table(
             this,
             "PlayerWorldDataTable",
@@ -150,6 +159,27 @@ export class LupworldsCdkStack extends cdk.Stack {
             },
         );
 
+        const worldImagesBucket = new s3.Bucket(this, "WorldImagesBucket", {
+            removalPolicy: cdk.RemovalPolicy.DESTROY, // DEV only
+            autoDeleteObjects: true, // DEV only
+            publicReadAccess: true,
+            blockPublicAccess: s3.BlockPublicAccess.BLOCK_ACLS_ONLY,
+            cors: [
+                {
+                    allowedMethods: [
+                        s3.HttpMethods.GET,
+                        s3.HttpMethods.PUT,
+                        s3.HttpMethods.POST,
+                        s3.HttpMethods.DELETE,
+                    ],
+                    allowedOrigins: ["*"], // Update for production
+                    allowedHeaders: ["*"],
+                    exposedHeaders: ["ETag"],
+                    maxAge: 3000,
+                },
+            ],
+        });
+
         const bannerImagesBucket = new s3.Bucket(this, "BannerImagesBucket", {
             removalPolicy: cdk.RemovalPolicy.DESTROY, // DEV only
             autoDeleteObjects: true, // DEV only
@@ -185,6 +215,8 @@ export class LupworldsCdkStack extends cdk.Stack {
                 BANNERS_TABLE_NAME: bannersTable.tableName,
                 BANNER_IMAGES_BUCKET_NAME: bannerImagesBucket.bucketName,
                 PLAYER_WORLD_DATA_TABLE_NAME: playerWorldDataTable.tableName,
+                WORLDS_TABLE_NAME: worldsTable.tableName,
+                WORLD_IMAGES_BUCKET_NAME: worldImagesBucket.bucketName,
             },
         });
 
@@ -196,6 +228,8 @@ export class LupworldsCdkStack extends cdk.Stack {
         bannersTable.grantReadWriteData(apiLambda);
         bannerImagesBucket.grantReadWrite(apiLambda);
         playerWorldDataTable.grantReadWriteData(apiLambda);
+        worldsTable.grantReadWriteData(apiLambda);
+        worldImagesBucket.grantReadWrite(apiLambda);
 
         new LambdaRestApi(this, "LupworldsRestAPI", {
             handler: apiLambda,

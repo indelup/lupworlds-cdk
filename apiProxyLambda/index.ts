@@ -6,6 +6,7 @@ import characters from "./resources/characters";
 import materials from "./resources/materials";
 import banners from "./resources/banners";
 import playerData from "./resources/playerData";
+import worlds from "./resources/worlds";
 
 const app = new Hono();
 
@@ -26,5 +27,6 @@ app.route("/characters", characters);
 app.route("/materials", materials);
 app.route("/banners", banners);
 app.route("/player-data", playerData);
+app.route("/worlds", worlds);
 
 export const handler = handle(app);

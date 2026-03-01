@@ -90,6 +90,20 @@ app.put("/:id", async (c) => {
                     console.error(`Failed to delete old backgroundSrc ${oldBackgroundSrc}:`, deleteError);
                 }
             }
+
+            for (const rarity of [1, 2, 3, 4, 5]) {
+                const oldKey = existing.Item.cardBacks?.[rarity];
+                const newKey = updatedWorld.cardBacks?.[rarity];
+                if (oldKey && oldKey !== newKey) {
+                    try {
+                        await s3Client.send(
+                            new DeleteObjectCommand({ Bucket: bucketName, Key: oldKey }),
+                        );
+                    } catch (deleteError: any) {
+                        console.error(`Failed to delete old cardBacks[${rarity}] ${oldKey}:`, deleteError);
+                    }
+                }
+            }
         }
 
         const putCommand = new PutCommand({

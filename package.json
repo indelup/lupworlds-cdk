@@ -28,7 +28,8 @@
     },
     "overrides": {
         "test-exclude": "^8.0.0",
-        "glob": "^11.0.0"
+        "glob": "^11.0.0",
+        "fast-xml-parser": ">=5.3.8"
     },
     "dependencies": {
         "@aws-sdk/client-dynamodb": "^3.585.0",

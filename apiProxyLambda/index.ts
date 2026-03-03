@@ -4,6 +4,7 @@ import { handle } from "hono/aws-lambda";
 import users from "./resources/users";
 import characters from "./resources/characters";
 import materials from "./resources/materials";
+import actions from "./resources/actions";
 import banners from "./resources/banners";
 import playerData from "./resources/playerData";
 import worlds from "./resources/worlds";
@@ -25,6 +26,7 @@ app.use(
 app.route("/users", users);
 app.route("/characters", characters);
 app.route("/materials", materials);
+app.route("/actions", actions);
 app.route("/banners", banners);
 app.route("/player-data", playerData);
 app.route("/worlds", worlds);

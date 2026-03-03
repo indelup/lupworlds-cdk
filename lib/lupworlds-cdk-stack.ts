@@ -37,6 +37,15 @@ export class LupworldsCdkStack extends cdk.Stack {
             removalPolicy: cdk.RemovalPolicy.DESTROY, // DEV only
         });
 
+        const actionsTable = new dynamodb.Table(this, "ActionsTable", {
+            tableName: "Actions",
+            partitionKey: {
+                name: "id",
+                type: dynamodb.AttributeType.STRING,
+            },
+            removalPolicy: cdk.RemovalPolicy.DESTROY, // DEV only
+        });
+
         const bannersTable = new dynamodb.Table(this, "BannersTable", {
             tableName: "Banners",
             partitionKey: {
@@ -92,6 +101,15 @@ export class LupworldsCdkStack extends cdk.Stack {
         });
 
         materialsTable.addGlobalSecondaryIndex({
+            indexName: "WorldIdIndex",
+            partitionKey: {
+                name: "worldId",
+                type: dynamodb.AttributeType.STRING,
+            },
+            projectionType: dynamodb.ProjectionType.ALL,
+        });
+
+        actionsTable.addGlobalSecondaryIndex({
             indexName: "WorldIdIndex",
             partitionKey: {
                 name: "worldId",
@@ -159,6 +177,27 @@ export class LupworldsCdkStack extends cdk.Stack {
             },
         );
 
+        const actionImagesBucket = new s3.Bucket(this, "ActionImagesBucket", {
+            removalPolicy: cdk.RemovalPolicy.DESTROY, // DEV only
+            autoDeleteObjects: true, // DEV only
+            publicReadAccess: true,
+            blockPublicAccess: s3.BlockPublicAccess.BLOCK_ACLS_ONLY,
+            cors: [
+                {
+                    allowedMethods: [
+                        s3.HttpMethods.GET,
+                        s3.HttpMethods.PUT,
+                        s3.HttpMethods.POST,
+                        s3.HttpMethods.DELETE,
+                    ],
+                    allowedOrigins: ["*"], // Update for production
+                    allowedHeaders: ["*"],
+                    exposedHeaders: ["ETag"],
+                    maxAge: 3000,
+                },
+            ],
+        });
+
         const worldImagesBucket = new s3.Bucket(this, "WorldImagesBucket", {
             removalPolicy: cdk.RemovalPolicy.DESTROY, // DEV only
             autoDeleteObjects: true, // DEV only
@@ -211,6 +250,8 @@ export class LupworldsCdkStack extends cdk.Stack {
                 CHARACTER_IMAGES_BUCKET_NAME: characterImagesBucket.bucketName,
                 MATERIALS_TABLE_NAME: materialsTable.tableName,
                 MATERIALS_IMAGES_BUCKET_NAME: materialImagesBucket.bucketName,
+                ACTIONS_TABLE_NAME: actionsTable.tableName,
+                ACTION_IMAGES_BUCKET_NAME: actionImagesBucket.bucketName,
                 USERS_TABLE_NAME: usersTable.tableName,
                 BANNERS_TABLE_NAME: bannersTable.tableName,
                 BANNER_IMAGES_BUCKET_NAME: bannerImagesBucket.bucketName,
@@ -225,6 +266,8 @@ export class LupworldsCdkStack extends cdk.Stack {
         characterImagesBucket.grantReadWrite(apiLambda);
         materialsTable.grantReadWriteData(apiLambda);
         materialImagesBucket.grantReadWrite(apiLambda);
+        actionsTable.grantReadWriteData(apiLambda);
+        actionImagesBucket.grantReadWrite(apiLambda);
         bannersTable.grantReadWriteData(apiLambda);
         bannerImagesBucket.grantReadWrite(apiLambda);
         playerWorldDataTable.grantReadWriteData(apiLambda);

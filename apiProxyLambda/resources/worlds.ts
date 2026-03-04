@@ -104,6 +104,26 @@ app.put("/:id", async (c) => {
                     }
                 }
             }
+
+            // Clean up replaced or deleted currency images
+            const oldCurrencies: { id: string; image: string }[] = existing.Item.currencies ?? [];
+            const newCurrencyIds = new Set((updatedWorld.currencies ?? []).map((c: any) => c.id));
+            const newCurrencyImageMap = new Map(
+                (updatedWorld.currencies ?? []).map((c: any) => [c.id, c.image]),
+            );
+            for (const oldCurrency of oldCurrencies) {
+                const stillExists = newCurrencyIds.has(oldCurrency.id);
+                const imageChanged = newCurrencyImageMap.get(oldCurrency.id) !== oldCurrency.image;
+                if (oldCurrency.image && (!stillExists || imageChanged)) {
+                    try {
+                        await s3Client.send(
+                            new DeleteObjectCommand({ Bucket: bucketName, Key: oldCurrency.image }),
+                        );
+                    } catch (deleteError: any) {
+                        console.error(`Failed to delete currency image ${oldCurrency.image}:`, deleteError);
+                    }
+                }
+            }
         }
 
         const putCommand = new PutCommand({

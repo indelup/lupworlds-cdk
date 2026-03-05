@@ -5,6 +5,7 @@ import { NodejsFunction } from "aws-cdk-lib/aws-lambda-nodejs";
 import { LambdaRestApi } from "aws-cdk-lib/aws-apigateway";
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 import * as s3 from "aws-cdk-lib/aws-s3";
+import * as iam from "aws-cdk-lib/aws-iam";
 
 export class LupworldsCdkStack extends cdk.Stack {
     constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -258,6 +259,12 @@ export class LupworldsCdkStack extends cdk.Stack {
                 PLAYER_WORLD_DATA_TABLE_NAME: playerWorldDataTable.tableName,
                 WORLDS_TABLE_NAME: worldsTable.tableName,
                 WORLD_IMAGES_BUCKET_NAME: worldImagesBucket.bucketName,
+                TWITCH_CLIENT_ID: process.env.TWITCH_CLIENT_ID ?? "",
+                TWITCH_REDIRECT_URI: process.env.TWITCH_REDIRECT_URI ?? "",
+                FRONTEND_URL: process.env.FRONTEND_URL ?? "",
+                JWT_SECRET_PARAM_NAME: "/lupworlds/jwt/secret",
+                BOT_JWT_PARAM_NAME: "/lupworlds/bot/jwt",
+                TWITCH_CLIENT_SECRET_PARAM_NAME: "/lupworlds/twitch/client-secret",
             },
         });
 
@@ -273,6 +280,16 @@ export class LupworldsCdkStack extends cdk.Stack {
         playerWorldDataTable.grantReadWriteData(apiLambda);
         worldsTable.grantReadWriteData(apiLambda);
         worldImagesBucket.grantReadWrite(apiLambda);
+
+        // Grant Lambda permission to read SSM SecureString parameters
+        apiLambda.addToRolePolicy(
+            new iam.PolicyStatement({
+                actions: ["ssm:GetParameter"],
+                resources: [
+                    `arn:aws:ssm:${this.region}:${this.account}:parameter/lupworlds/*`,
+                ],
+            }),
+        );
 
         new LambdaRestApi(this, "LupworldsRestAPI", {
             handler: apiLambda,

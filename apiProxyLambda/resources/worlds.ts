@@ -12,14 +12,22 @@ import {
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { randomUUID } from "crypto";
+import type { AppEnv, CallerContext } from "../types/auth";
 
-const app = new Hono();
+const app = new Hono<AppEnv>();
 
 const dbClient = new DynamoDBClient({});
 const ddbDocClient = DynamoDBDocumentClient.from(dbClient);
 const tableName = process.env.WORLDS_TABLE_NAME;
 const bucketName = process.env.WORLD_IMAGES_BUCKET_NAME;
 const s3Client = new S3Client({});
+
+function canWrite(caller: CallerContext, worldId: string): boolean {
+    if (caller.type === "bot") return true;
+    if (caller.type === "user" && caller.ownedWorldIds.includes(worldId))
+        return true;
+    return false;
+}
 
 app.get("/:id", async (c) => {
     if (!tableName) {
@@ -56,6 +64,11 @@ app.put("/:id", async (c) => {
     }
 
     const worldId = c.req.param("id");
+    const caller = c.get("caller");
+
+    if (!canWrite(caller, worldId)) {
+        return c.json({ error: "Forbidden" }, 403);
+    }
 
     try {
         const getCommand = new GetCommand({
@@ -74,20 +87,35 @@ app.put("/:id", async (c) => {
             if (oldLogoSrc && oldLogoSrc !== updatedWorld.logoSrc) {
                 try {
                     await s3Client.send(
-                        new DeleteObjectCommand({ Bucket: bucketName, Key: oldLogoSrc }),
+                        new DeleteObjectCommand({
+                            Bucket: bucketName,
+                            Key: oldLogoSrc,
+                        }),
                     );
                 } catch (deleteError: any) {
-                    console.error(`Failed to delete old logoSrc ${oldLogoSrc}:`, deleteError);
+                    console.error(
+                        `Failed to delete old logoSrc ${oldLogoSrc}:`,
+                        deleteError,
+                    );
                 }
             }
 
-            if (oldBackgroundSrc && oldBackgroundSrc !== updatedWorld.backgroundSrc) {
+            if (
+                oldBackgroundSrc &&
+                oldBackgroundSrc !== updatedWorld.backgroundSrc
+            ) {
                 try {
                     await s3Client.send(
-                        new DeleteObjectCommand({ Bucket: bucketName, Key: oldBackgroundSrc }),
+                        new DeleteObjectCommand({
+                            Bucket: bucketName,
+                            Key: oldBackgroundSrc,
+                        }),
                     );
                 } catch (deleteError: any) {
-                    console.error(`Failed to delete old backgroundSrc ${oldBackgroundSrc}:`, deleteError);
+                    console.error(
+                        `Failed to delete old backgroundSrc ${oldBackgroundSrc}:`,
+                        deleteError,
+                    );
                 }
             }
 
@@ -97,10 +125,16 @@ app.put("/:id", async (c) => {
                 if (oldKey && oldKey !== newKey) {
                     try {
                         await s3Client.send(
-                            new DeleteObjectCommand({ Bucket: bucketName, Key: oldKey }),
+                            new DeleteObjectCommand({
+                                Bucket: bucketName,
+                                Key: oldKey,
+                            }),
                         );
                     } catch (deleteError: any) {
-                        console.error(`Failed to delete old cardBacks[${rarity}] ${oldKey}:`, deleteError);
+                        console.error(
+                            `Failed to delete old cardBacks[${rarity}] ${oldKey}:`,
+                            deleteError,
+                        );
                     }
                 }
             }
@@ -127,10 +161,18 @@ app.post("/get-presigned-url", async (c) => {
         return c.json({ error: "Bucket name not configured" }, 500);
     }
 
+    const caller = c.get("caller");
+    if (caller.type === "overlay") {
+        return c.json({ error: "Forbidden" }, 403);
+    }
+
     try {
         const { fileName, contentType } = await c.req.json();
         if (!fileName || !contentType) {
-            return c.json({ error: "fileName and contentType are required" }, 400);
+            return c.json(
+                { error: "fileName and contentType are required" },
+                400,
+            );
         }
 
         const key = `${randomUUID()}-${fileName}`;

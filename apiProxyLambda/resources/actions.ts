@@ -14,14 +14,26 @@ import {
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { randomUUID } from "crypto";
+import type { AppEnv, CallerContext } from "../types/auth";
 
-const app = new Hono();
+const app = new Hono<AppEnv>();
 
 const dbClient = new DynamoDBClient({});
 const ddbDocClient = DynamoDBDocumentClient.from(dbClient);
 const tableName = process.env.ACTIONS_TABLE_NAME;
 const bucketName = process.env.ACTION_IMAGES_BUCKET_NAME;
 const s3Client = new S3Client({});
+
+function canWrite(caller: CallerContext, worldId: string | undefined): boolean {
+    if (caller.type === "bot") return true;
+    if (
+        caller.type === "user" &&
+        worldId &&
+        caller.ownedWorldIds.includes(worldId)
+    )
+        return true;
+    return false;
+}
 
 app.get("/", async (c) => {
     if (!tableName) {
@@ -57,6 +69,12 @@ app.post("/", async (c) => {
     }
     try {
         const body = await c.req.json();
+        const caller = c.get("caller");
+
+        if (!canWrite(caller, body.worldId)) {
+            return c.json({ error: "Forbidden" }, 403);
+        }
+
         const newAction = {
             ...body,
             id: randomUUID(),
@@ -77,6 +95,10 @@ app.post("/", async (c) => {
 app.post("/get-presigned-url", async (c) => {
     if (!bucketName) {
         return c.json({ error: "Bucket name not configured" }, 500);
+    }
+    const caller = c.get("caller");
+    if (caller.type === "overlay") {
+        return c.json({ error: "Forbidden" }, 403);
     }
     try {
         const { fileName, contentType } = await c.req.json();
@@ -118,7 +140,6 @@ app.put("/:id", async (c) => {
     }
 
     try {
-        // Get the existing action to compare images
         const getCommand = new GetCommand({
             TableName: tableName,
             Key: { id: actionId },
@@ -129,15 +150,18 @@ app.put("/:id", async (c) => {
             return c.json({ error: "Action not found" }, 404);
         }
 
+        const caller = c.get("caller");
+        if (!canWrite(caller, existingAction.Item.worldId as string)) {
+            return c.json({ error: "Forbidden" }, 403);
+        }
+
         const updatedAction = await c.req.json();
 
-        // Check if actionSrc or backgroundSrc have changed and delete old ones from S3
         const oldActionSrc = existingAction.Item.actionSrc;
         const oldBackgroundSrc = existingAction.Item.backgroundSrc;
         const newActionSrc = updatedAction.actionSrc;
         const newBackgroundSrc = updatedAction.backgroundSrc;
 
-        // Delete old actionSrc if it changed and is not empty
         if (oldActionSrc && oldActionSrc !== newActionSrc) {
             try {
                 const deleteCommand = new DeleteObjectCommand({
@@ -151,11 +175,9 @@ app.put("/:id", async (c) => {
                     `Failed to delete actionSrc ${oldActionSrc}:`,
                     deleteError,
                 );
-                // Continue with the update even if image deletion fails
             }
         }
 
-        // Delete old backgroundSrc if it changed and is not empty
         if (oldBackgroundSrc && oldBackgroundSrc !== newBackgroundSrc) {
             try {
                 const deleteCommand = new DeleteObjectCommand({
@@ -169,16 +191,14 @@ app.put("/:id", async (c) => {
                     `Failed to delete backgroundSrc ${oldBackgroundSrc}:`,
                     deleteError,
                 );
-                // Continue with the update even if image deletion fails
             }
         }
 
-        // Update the action in DynamoDB
         const putCommand = new PutCommand({
             TableName: tableName,
             Item: {
                 ...updatedAction,
-                id: actionId, // Ensure the ID remains the same
+                id: actionId,
             },
         });
 
@@ -211,7 +231,6 @@ app.delete("/:id", async (c) => {
     }
 
     try {
-        // Get the existing action to find its images
         const getCommand = new GetCommand({
             TableName: tableName,
             Key: { id: actionId },
@@ -222,7 +241,11 @@ app.delete("/:id", async (c) => {
             return c.json({ error: "Action not found" }, 404);
         }
 
-        // Delete actionSrc from S3 if it exists
+        const caller = c.get("caller");
+        if (!canWrite(caller, existingAction.Item.worldId as string)) {
+            return c.json({ error: "Forbidden" }, 403);
+        }
+
         if (existingAction.Item.actionSrc) {
             try {
                 const deleteActionCommand = new DeleteObjectCommand({
@@ -238,11 +261,9 @@ app.delete("/:id", async (c) => {
                     `Failed to delete actionSrc ${existingAction.Item.actionSrc}:`,
                     deleteError,
                 );
-                // Continue with deletion even if image deletion fails
             }
         }
 
-        // Delete backgroundSrc from S3 if it exists
         if (existingAction.Item.backgroundSrc) {
             try {
                 const deleteBackgroundCommand = new DeleteObjectCommand({
@@ -258,11 +279,9 @@ app.delete("/:id", async (c) => {
                     `Failed to delete backgroundSrc ${existingAction.Item.backgroundSrc}:`,
                     deleteError,
                 );
-                // Continue with deletion even if image deletion fails
             }
         }
 
-        // Delete the action from DynamoDB
         const deleteCommand = new DeleteCommand({
             TableName: tableName,
             Key: { id: actionId },

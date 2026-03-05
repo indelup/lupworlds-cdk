@@ -14,14 +14,26 @@ import {
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { randomUUID } from "crypto";
+import type { AppEnv, CallerContext } from "../types/auth";
 
-const app = new Hono();
+const app = new Hono<AppEnv>();
 
 const dbClient = new DynamoDBClient({});
 const ddbDocClient = DynamoDBDocumentClient.from(dbClient);
 const tableName = process.env.CHARACTERS_TABLE_NAME;
 const bucketName = process.env.CHARACTER_IMAGES_BUCKET_NAME;
 const s3Client = new S3Client({});
+
+function canWrite(caller: CallerContext, worldId: string | undefined): boolean {
+    if (caller.type === "bot") return true;
+    if (
+        caller.type === "user" &&
+        worldId &&
+        caller.ownedWorldIds.includes(worldId)
+    )
+        return true;
+    return false;
+}
 
 app.get("/", async (c) => {
     if (!tableName) {
@@ -37,7 +49,7 @@ app.get("/", async (c) => {
     try {
         const command = new QueryCommand({
             TableName: tableName,
-            IndexName: "WorldIdIndex", // You'll need to create this GSI
+            IndexName: "WorldIdIndex",
             KeyConditionExpression: "worldId = :worldId",
             ExpressionAttributeValues: {
                 ":worldId": worldId,
@@ -57,6 +69,12 @@ app.post("/", async (c) => {
     }
     try {
         const body = await c.req.json();
+        const caller = c.get("caller");
+
+        if (!canWrite(caller, body.worldId)) {
+            return c.json({ error: "Forbidden" }, 403);
+        }
+
         const newCharacter = {
             ...body,
             id: randomUUID(),
@@ -77,6 +95,10 @@ app.post("/", async (c) => {
 app.post("/get-presigned-url", async (c) => {
     if (!bucketName) {
         return c.json({ error: "Bucket name not configured" }, 500);
+    }
+    const caller = c.get("caller");
+    if (caller.type === "overlay") {
+        return c.json({ error: "Forbidden" }, 403);
     }
     try {
         const { fileName, contentType } = await c.req.json();
@@ -127,6 +149,11 @@ app.put("/:id", async (c) => {
 
         if (!existingCharacter.Item) {
             return c.json({ error: "Character not found" }, 404);
+        }
+
+        const caller = c.get("caller");
+        if (!canWrite(caller, existingCharacter.Item.worldId as string)) {
+            return c.json({ error: "Forbidden" }, 403);
         }
 
         const updatedCharacter = await c.req.json();
@@ -220,6 +247,11 @@ app.delete("/:id", async (c) => {
 
         if (!existingCharacter.Item) {
             return c.json({ error: "Character not found" }, 404);
+        }
+
+        const caller = c.get("caller");
+        if (!canWrite(caller, existingCharacter.Item.worldId as string)) {
+            return c.json({ error: "Forbidden" }, 403);
         }
 
         // Delete characterSrc from S3 if it exists

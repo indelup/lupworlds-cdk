@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { randomUUID } from "crypto";
-import * as sharp from "sharp";
+import sharp from "sharp";
 
 const app = new Hono();
 const s3Client = new S3Client({});

@@ -51,13 +51,10 @@ app.get("/:key{.+}", async (c) => {
         );
         const bytes = await cached.Body!.transformToByteArray();
         return new Response(bytes, {
-            headers: {
-                "Content-Type": cached.ContentType ?? "image/jpeg",
-                "Cache-Control": "public, max-age=31536000",
-            },
+            headers: { "Content-Type": "image/jpeg", "Cache-Control": "public, max-age=31536000" },
         });
     } catch (e: any) {
-        if (e.name !== "NoSuchKey") throw e;
+        if (e.name !== "NoSuchKey") console.error("Cache check error:", e);
     }
 
     // Fetch original
@@ -74,37 +71,28 @@ app.get("/:key{.+}", async (c) => {
     const originalBytes = await original.Body!.transformToByteArray();
     const buffer = Buffer.from(originalBytes);
 
-    // Check if already correct size
-    const metadata = await sharp(buffer).metadata();
-    if (metadata.width === dims.w && metadata.height === dims.h) {
-        return new Response(buffer, {
-            headers: { "Content-Type": original.ContentType ?? "image/jpeg" },
-        });
-    }
-
     // Resize
     const resized = await sharp(buffer)
         .resize(dims.w, dims.h, { fit: "contain", background: "#ffffff" })
         .jpeg()
         .toBuffer();
 
-    // Fire-and-forget cache write
-    s3Client
-        .send(
+    // Write cache (awaited — Lambda may freeze before fire-and-forget completes)
+    try {
+        await s3Client.send(
             new PutObjectCommand({
                 Bucket: sourceBucket,
                 Key: cachedKey,
                 Body: resized,
                 ContentType: "image/jpeg",
             }),
-        )
-        .catch(console.error);
+        );
+    } catch (e) {
+        console.error("Cache write error:", e);
+    }
 
     return new Response(resized, {
-        headers: {
-            "Content-Type": "image/jpeg",
-            "Cache-Control": "public, max-age=31536000",
-        },
+        headers: { "Content-Type": "image/jpeg", "Cache-Control": "public, max-age=31536000" },
     });
 });
 

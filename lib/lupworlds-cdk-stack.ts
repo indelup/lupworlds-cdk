@@ -157,6 +157,7 @@ export class LupworldsCdkStack extends cdk.Stack {
             runtime: lambda.Runtime.NODEJS_22_X,
             functionName: "LupworldsLambda",
             memorySize: 512,
+            timeout: cdk.Duration.seconds(30),
             bundling: {
                 nodeModules: ["sharp"],
             },
@@ -183,10 +184,15 @@ export class LupworldsCdkStack extends cdk.Stack {
         assetImagesBucket.grantReadWrite(apiLambda);
         configImagesBucket.grantReadWrite(apiLambda);
 
+        const imageFnUrl = apiLambda.addFunctionUrl({
+            authType: lambda.FunctionUrlAuthType.NONE,
+        });
+
+        new cdk.CfnOutput(this, "ImageFunctionUrl", { value: imageFnUrl.url });
+
         new LambdaRestApi(this, "LupworldsRestAPI", {
             handler: apiLambda,
             proxy: true,
-            binaryMediaTypes: ["image/*"],
         });
     }
 }

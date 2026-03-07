@@ -127,57 +127,7 @@ export class LupworldsCdkStack extends cdk.Stack {
             projectionType: dynamodb.ProjectionType.ALL,
         });
 
-        const characterImagesBucket = new s3.Bucket(
-            this,
-            "CharacterImagesBucket",
-            {
-                removalPolicy: cdk.RemovalPolicy.DESTROY, // DEV only
-                autoDeleteObjects: true, // DEV only
-                publicReadAccess: true,
-                blockPublicAccess: s3.BlockPublicAccess.BLOCK_ACLS_ONLY,
-                cors: [
-                    {
-                        allowedMethods: [
-                            s3.HttpMethods.GET,
-                            s3.HttpMethods.PUT,
-                            s3.HttpMethods.POST,
-                            s3.HttpMethods.DELETE,
-                        ],
-                        allowedOrigins: ["*"], // Update for production
-                        allowedHeaders: ["*"],
-                        exposedHeaders: ["ETag"],
-                        maxAge: 3000,
-                    },
-                ],
-            },
-        );
-
-        const materialImagesBucket = new s3.Bucket(
-            this,
-            "MaterialImagesBucket",
-            {
-                removalPolicy: cdk.RemovalPolicy.DESTROY, // DEV only
-                autoDeleteObjects: true, // DEV only
-                publicReadAccess: true,
-                blockPublicAccess: s3.BlockPublicAccess.BLOCK_ACLS_ONLY,
-                cors: [
-                    {
-                        allowedMethods: [
-                            s3.HttpMethods.GET,
-                            s3.HttpMethods.PUT,
-                            s3.HttpMethods.POST,
-                            s3.HttpMethods.DELETE,
-                        ],
-                        allowedOrigins: ["*"], // Update for production
-                        allowedHeaders: ["*"],
-                        exposedHeaders: ["ETag"],
-                        maxAge: 3000,
-                    },
-                ],
-            },
-        );
-
-        const actionImagesBucket = new s3.Bucket(this, "ActionImagesBucket", {
+        const bucketProps = {
             removalPolicy: cdk.RemovalPolicy.DESTROY, // DEV only
             autoDeleteObjects: true, // DEV only
             publicReadAccess: true,
@@ -196,49 +146,10 @@ export class LupworldsCdkStack extends cdk.Stack {
                     maxAge: 3000,
                 },
             ],
-        });
+        };
 
-        const worldImagesBucket = new s3.Bucket(this, "WorldImagesBucket", {
-            removalPolicy: cdk.RemovalPolicy.DESTROY, // DEV only
-            autoDeleteObjects: true, // DEV only
-            publicReadAccess: true,
-            blockPublicAccess: s3.BlockPublicAccess.BLOCK_ACLS_ONLY,
-            cors: [
-                {
-                    allowedMethods: [
-                        s3.HttpMethods.GET,
-                        s3.HttpMethods.PUT,
-                        s3.HttpMethods.POST,
-                        s3.HttpMethods.DELETE,
-                    ],
-                    allowedOrigins: ["*"], // Update for production
-                    allowedHeaders: ["*"],
-                    exposedHeaders: ["ETag"],
-                    maxAge: 3000,
-                },
-            ],
-        });
-
-        const bannerImagesBucket = new s3.Bucket(this, "BannerImagesBucket", {
-            removalPolicy: cdk.RemovalPolicy.DESTROY, // DEV only
-            autoDeleteObjects: true, // DEV only
-            publicReadAccess: true,
-            blockPublicAccess: s3.BlockPublicAccess.BLOCK_ACLS_ONLY,
-            cors: [
-                {
-                    allowedMethods: [
-                        s3.HttpMethods.GET,
-                        s3.HttpMethods.PUT,
-                        s3.HttpMethods.POST,
-                        s3.HttpMethods.DELETE,
-                    ],
-                    allowedOrigins: ["*"], // Update for production
-                    allowedHeaders: ["*"],
-                    exposedHeaders: ["ETag"],
-                    maxAge: 3000,
-                },
-            ],
-        });
+        const assetImagesBucket = new s3.Bucket(this, "AssetImagesBucket", bucketProps);
+        const configImagesBucket = new s3.Bucket(this, "ConfigImagesBucket", bucketProps);
 
         const apiLambda = new NodejsFunction(this, "LupworldsLambda", {
             entry: "apiProxyLambda/index.ts",
@@ -247,32 +158,26 @@ export class LupworldsCdkStack extends cdk.Stack {
             functionName: "LupworldsLambda",
             environment: {
                 CHARACTERS_TABLE_NAME: charactersTable.tableName,
-                CHARACTER_IMAGES_BUCKET_NAME: characterImagesBucket.bucketName,
                 MATERIALS_TABLE_NAME: materialsTable.tableName,
-                MATERIALS_IMAGES_BUCKET_NAME: materialImagesBucket.bucketName,
                 ACTIONS_TABLE_NAME: actionsTable.tableName,
-                ACTION_IMAGES_BUCKET_NAME: actionImagesBucket.bucketName,
                 USERS_TABLE_NAME: usersTable.tableName,
                 BANNERS_TABLE_NAME: bannersTable.tableName,
-                BANNER_IMAGES_BUCKET_NAME: bannerImagesBucket.bucketName,
                 PLAYER_WORLD_DATA_TABLE_NAME: playerWorldDataTable.tableName,
                 WORLDS_TABLE_NAME: worldsTable.tableName,
-                WORLD_IMAGES_BUCKET_NAME: worldImagesBucket.bucketName,
+                ASSET_IMAGES_BUCKET_NAME: assetImagesBucket.bucketName,
+                CONFIG_IMAGES_BUCKET_NAME: configImagesBucket.bucketName,
             },
         });
 
         usersTable.grantReadWriteData(apiLambda);
         charactersTable.grantReadWriteData(apiLambda);
-        characterImagesBucket.grantReadWrite(apiLambda);
         materialsTable.grantReadWriteData(apiLambda);
-        materialImagesBucket.grantReadWrite(apiLambda);
         actionsTable.grantReadWriteData(apiLambda);
-        actionImagesBucket.grantReadWrite(apiLambda);
         bannersTable.grantReadWriteData(apiLambda);
-        bannerImagesBucket.grantReadWrite(apiLambda);
         playerWorldDataTable.grantReadWriteData(apiLambda);
         worldsTable.grantReadWriteData(apiLambda);
-        worldImagesBucket.grantReadWrite(apiLambda);
+        assetImagesBucket.grantReadWrite(apiLambda);
+        configImagesBucket.grantReadWrite(apiLambda);
 
         new LambdaRestApi(this, "LupworldsRestAPI", {
             handler: apiLambda,

@@ -8,6 +8,7 @@ import actions from "./resources/actions";
 import banners from "./resources/banners";
 import playerData from "./resources/playerData";
 import worlds from "./resources/worlds";
+import images from "./resources/images";
 
 const app = new Hono();
 
@@ -30,5 +31,6 @@ app.route("/actions", actions);
 app.route("/banners", banners);
 app.route("/player-data", playerData);
 app.route("/worlds", worlds);
+app.route("/images", images);
 
 export const handler = handle(app);

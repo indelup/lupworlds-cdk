@@ -38,7 +38,7 @@ export const authMiddleware: MiddlewareHandler<AppEnv> = async (c, next) => {
                 platform: payload.platform as string,
                 platformId: payload.platformId as string,
                 roles: (payload.roles as Role[]) ?? [],
-                ownedWorldIds: (payload.ownedWorldIds as string[]) ?? [],
+                worldId: payload.worldId as string,
             };
             break;
         case "overlay":

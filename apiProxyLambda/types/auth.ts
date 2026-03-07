@@ -11,7 +11,7 @@ export interface AccessTokenPayload {
     platform: string;
     platformId: string;
     roles: Role[];
-    ownedWorldIds: string[];
+    worldId: string;
 }
 
 export interface OverlayTokenPayload {
@@ -39,7 +39,7 @@ export type CallerContext =
           platform: string;
           platformId: string;
           roles: Role[];
-          ownedWorldIds: string[];
+          worldId: string;
       }
     | {
           type: "overlay";
@@ -57,4 +57,11 @@ export interface TwitchUserInfo {
     email?: string;
 }
 
-export type AppEnv = { Variables: { caller: CallerContext } };
+export type AppEnv = {
+    Variables: {
+        caller: CallerContext;
+        worldId: string;
+        parsedBody: Record<string, unknown>;
+        existingItem: Record<string, unknown>;
+    };
+};

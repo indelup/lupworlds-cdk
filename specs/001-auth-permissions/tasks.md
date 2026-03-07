@@ -30,9 +30,10 @@
 
 **CRITICAL**: No user story work can begin until this phase is complete
 
-- [x] T004 Define shared TypeScript types (`Role`, `AccessTokenPayload`, `OverlayTokenPayload`, `ServiceTokenPayload`, `CallerContext`, `TwitchUserInfo`) in `apiProxyLambda/types/auth.ts`
+- [x] T004 Define shared TypeScript types (`Role`, `AccessTokenPayload`, `OverlayTokenPayload`, `ServiceTokenPayload`, `CallerContext`, `TwitchUserInfo`) in `apiProxyLambda/types/auth.ts`. User `CallerContext` uses `worldId: string` (single world, token-scoped) — NOT `ownedWorldIds: string[]`. `AppEnv.Variables` includes `caller`, `worldId`, and `existingItem`.
 - [x] T005 [P] Implement SSM secret-loading helper with module-scope Promise cache (`getJwtSecret`, `getBotJwt`, `getTwitchClientSecret`) in `apiProxyLambda/lib/secrets.ts`
-- [x] T006 Implement global auth middleware (`apiProxyLambda/middleware/auth.ts`): extract Bearer token, `verify()` with `hono/jwt`, dispatch on `payload.typ` (`access` / `overlay` / `service`), set `c.set('caller', callerContext)`, skip for `GET /auth/twitch/callback`
+- [x] T006 Implement global auth middleware (`apiProxyLambda/middleware/auth.ts`): extract Bearer token, `verify()` with `hono/jwt`, dispatch on `payload.typ` (`access` / `overlay` / `service`), set `c.set('caller', callerContext)`, skip for `GET /auth/twitch/callback`. For `access` tokens, `CallerContext` uses `worldId: string` (not `ownedWorldIds`).
+- [x] T006b Implement authorization middleware (`apiProxyLambda/middleware/authorization.ts`): `requireNotOverlay`, `resolveWorldId` (worldId from token for user, from body for bot; blocks overlay), `requireWorldWrite(param)` (for world upsert by URL param), `requireItemWorldWrite(tableName, param)` (fetch item + world-scope check + expose via context). Bot has god access in all write guards.
 - [x] T007 Register auth middleware and `/auth` route group in `apiProxyLambda/index.ts`
 - [x] T008 Update CDK stack (`lib/lupworlds-cdk-stack.ts`): add `ssm:GetParameter` IAM policy for `arn:aws:ssm:{region}:{account}:parameter/lupworlds/*` and set non-sensitive env vars (`TWITCH_CLIENT_ID`, `TWITCH_REDIRECT_URI`, `FRONTEND_URL`, `JWT_SECRET_PARAM_NAME`, `BOT_JWT_PARAM_NAME`, `TWITCH_CLIENT_SECRET_PARAM_NAME`)
 
@@ -49,11 +50,11 @@
 ### Implementation for User Story 1
 
 - [x] T009 [US1] Implement `GET /auth/twitch/callback` in `apiProxyLambda/resources/auth.ts`: exchange `?code` for a Twitch access token (`POST https://id.twitch.tv/oauth2/token`), fetch user info (`GET https://api.twitch.tv/helix/users`), find-or-create `User` record via `TwitchIdIndex` in DynamoDB, sign `AccessTokenPayload` with `hono/jwt`, redirect to `{FRONTEND_URL}?token=<jwt>`
-- [x] T010 [US1] Add RBAC guards to `apiProxyLambda/resources/characters.ts`: POST/PUT/DELETE require `caller.type === "user" && caller.ownedWorldIds.includes(worldId)` OR `caller.type === "bot"`; GET allows all authenticated callers
-- [x] T011 [P] [US1] Add RBAC guards to `apiProxyLambda/resources/materials.ts` (same pattern as T010)
-- [x] T012 [P] [US1] Add RBAC guards to `apiProxyLambda/resources/actions.ts` (same pattern as T010)
-- [x] T013 [P] [US1] Add RBAC guards to `apiProxyLambda/resources/banners.ts` (same pattern as T010)
-- [x] T014 [US1] Add RBAC guards to `apiProxyLambda/resources/worlds.ts`: PUT/DELETE require streamer ownership of the world OR bot; GET allows all authenticated callers
+- [x] T010 [US1] Apply authorization middleware to `apiProxyLambda/resources/characters.ts`: POST uses `resolveWorldId`, PUT/DELETE use `requireItemWorldWrite(tableName)`, presigned-url uses `requireNotOverlay`. Handlers are authorization-free. Env var validation at module startup.
+- [x] T011 [P] [US1] Apply authorization middleware to `apiProxyLambda/resources/materials.ts` (same pattern as T010)
+- [x] T012 [P] [US1] Apply authorization middleware to `apiProxyLambda/resources/actions.ts` (same pattern as T010)
+- [x] T013 [P] [US1] Apply authorization middleware to `apiProxyLambda/resources/banners.ts` (same pattern as T010)
+- [x] T014 [US1] Apply authorization middleware to `apiProxyLambda/resources/worlds.ts`: PUT uses `requireWorldWrite()` (worldId is URL param, upsert — item may not exist), presigned-url uses `requireNotOverlay`. GET allows all authenticated callers.
 - [x] T015 [US1] Add RBAC guards to `apiProxyLambda/resources/users.ts`: GET/PUT allowed only for streamer or viewer acting on their own `userId`, or bot
 
 **Checkpoint**: US1 fully functional. Streamer logs in via Twitch, receives JWT, can manage their own world resources, is denied access to another streamer's world.
@@ -85,7 +86,7 @@
 
 ### Implementation for User Story 3
 
-- [ ] T020 [US3] Implement `POST /auth/overlay-token` in `apiProxyLambda/resources/auth.ts`: validate `caller.type === "user" && caller.ownedWorldIds.includes(body.worldId)`, sign `OverlayTokenPayload` (`typ: "overlay"`, `aud: "overlay"`, `wid`, `scopes: ["world:read","playerdata:read"]`), return `{ token }`
+- [ ] T020 [US3] Implement `POST /auth/overlay-token` in `apiProxyLambda/resources/auth.ts`: validate `caller.type === "user" && caller.worldId === body.worldId` (token is world-scoped — streamer can only issue overlay tokens for their active world), sign `OverlayTokenPayload` (`typ: "overlay"`, `aud: "overlay"`, `wid: caller.worldId`, `scopes: ["world:read","playerdata:read"]`), return `{ token }`
 - [ ] T021 [US3] Enforce overlay world-scope in auth middleware (`apiProxyLambda/middleware/auth.ts`): when `caller.type === "overlay"`, verify the request's `worldId` (query param or path) matches `caller.wid`; reject mismatches with 403
 - [ ] T022 [US3] Enforce overlay read-only in existing resource guards: characters, materials, actions, banners, worlds — POST/PUT/DELETE must explicitly reject `caller.type === "overlay"` (audit all guards added in T010–T014 and add overlay check where missing)
 

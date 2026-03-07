@@ -61,7 +61,11 @@ specs/001-auth-permissions/
 apiProxyLambda/
 ├── index.ts                          MODIFY — register auth middleware + /auth route
 ├── middleware/
-│   └── auth.ts                       NEW — JWT verification, API key check, RBAC enforcement
+│   ├── auth.ts                       NEW — JWT verification, CallerContext construction (authentication)
+│   └── authorization.ts              NEW — route-level guards: resolveWorldId, requireNotOverlay,
+│                                           requireItemWorldWrite, requireWorldWrite (authorization)
+├── types/
+│   └── auth.ts                       MODIFY — worldId: string in user CallerContext (not ownedWorldIds)
 └── resources/
     └── auth.ts                       NEW — /auth/twitch/callback, /auth/overlay-token
 
@@ -71,7 +75,7 @@ lib/
 package.json                          MODIFY — add @aws-sdk/client-ssm
 ```
 
-**Existing resource routers** (`characters.ts`, `materials.ts`, `actions.ts`, `banners.ts`, `worlds.ts`, `users.ts`, `playerData.ts`): modified only to add RBAC checks using `c.get('caller')` context — no structural changes.
+**Existing resource routers** (`characters.ts`, `materials.ts`, `actions.ts`, `banners.ts`, `worlds.ts`, `users.ts`, `playerData.ts`): modified to use authorization middleware at the route level — authorization is resolved before the handler executes. Env var validation moved to module startup (throw on missing vars) instead of per-request checks.
 
 **Structure decision**: Single Lambda project (existing). Auth is a middleware layer + one new route module, not a separate Lambda or service.
 
@@ -79,7 +83,7 @@ package.json                          MODIFY — add @aws-sdk/client-ssm
 
 ## Implementation Detail
 
-### auth middleware (`middleware/auth.ts`)
+### auth middleware (`middleware/auth.ts`) — Authentication only
 
 Runs on every request except `GET /auth/twitch/callback`.
 
@@ -88,7 +92,9 @@ Runs on every request except `GET /auth/twitch/callback`.
 2. verify(token, jwtSecret) from hono/jwt → 401 if signature invalid
 3. Validate iss === "lupworlds" → 401 if not
 4. Dispatch on payload.typ:
-   - "access"  → CallerContext { type: "user", userId: sub, roles, ownedWorldIds, ... }
+   - "access"  → CallerContext { type: "user", userId: sub, platform, platformId, roles, worldId }
+                 Note: worldId is a single string — user tokens are world-scoped at issuance.
+                 Switching active worlds requires a new token.
    - "overlay" → CallerContext { type: "overlay", wid, scopes }
                  + validate aud === "overlay"
    - "service" → CallerContext { type: "bot", scopes }
@@ -101,6 +107,40 @@ SSM values loaded at module scope (cold-start cached Promise):
 - `getJwtSecret()` → `/lupworlds/jwt/secret`
 
 No separate bot credential fetch needed — the bot JWT is verified with the same secret as all other tokens.
+
+---
+
+### authorization middleware (`middleware/authorization.ts`) — Authorization only
+
+Route-level guards that run after `auth.ts` has established the caller identity. Applied per-route, not globally.
+
+**`requireNotOverlay`**: blocks overlay callers — used on presigned-url endpoints.
+
+**`resolveWorldId`**: used on POST routes where the entity being created belongs to a world.
+```
+- overlay  → 403
+- user     → worldId = caller.worldId (from token, no body parse needed)
+- bot      → worldId = body.worldId (bot operates across worlds; god access, no ownership check)
+Sets c.set("worldId", worldId) for the handler to consume.
+```
+
+**`requireWorldWrite(param)`**: used on world upsert (PUT /worlds/:id) where worldId is the URL param and the item may not exist yet.
+```
+- overlay → 403
+- user    → check caller.worldId === param value → 403 if mismatch
+- bot     → pass
+```
+
+**`requireItemWorldWrite(tableName, param)`**: used on PUT/DELETE where the item must exist and its worldId must match the caller.
+```
+1. Fetch item by id param from DynamoDB → 404 if not found
+2. overlay → 403
+3. user    → check caller.worldId === item.worldId → 403 if mismatch
+4. bot     → pass (god access)
+5. c.set("existingItem", item) for the handler
+```
+
+Bot always sends worldId in body/item — it has god access and operates across multiple worlds.
 
 ### auth resource (`resources/auth.ts`)
 
@@ -118,8 +158,9 @@ No separate bot credential fetch needed — the bot JWT is verified with the sam
 **POST /auth/overlay-token** (protected, streamer only):
 ```
 1. Auth middleware has already validated caller
-2. Check caller.type === "user" && caller.ownedWorldIds.includes(body.worldId) → else 403
-3. sign({ ...userClaims, scope: "read", worldId }, jwtSecret)
+2. Check caller.type === "user" && caller.worldId === body.worldId → else 403
+   (token is world-scoped — streamer can only issue overlay tokens for their active world)
+3. sign({ ...userClaims, typ: "overlay", aud: "overlay", wid: caller.worldId, scopes }, jwtSecret)
 4. Return { token }
 ```
 
@@ -143,24 +184,26 @@ apiLambda.addEnvironment("TWITCH_CLIENT_SECRET_PARAM_NAME", "/lupworlds/twitch/c
 
 ### RBAC in existing resource handlers
 
-Each handler reads `c.get('caller')` and applies the matrix. Pattern per handler:
+Authorization is resolved in middleware before the handler. Handlers are authorization-free — they only contain business logic.
 
 ```typescript
-// Example: Characters POST
-app.post("/", async (c) => {
-    const caller = c.get('caller');
-    const worldId = body.worldId; // or from query/path
+// Example: Characters POST — worldId resolved by middleware before handler runs
+app.post("/", resolveWorldId, async (c) => {
+    const worldId = c.get("worldId"); // already validated, no auth logic here
+    const body = await c.req.json();
+    const newCharacter = { ...body, worldId, id: randomUUID(), createdAt: new Date().toISOString() };
+    // ... write to DynamoDB
+});
 
-    const isStreamerOfWorld = caller.type === "user"
-        && caller.ownedWorldIds?.includes(worldId);
-    const isBot = caller.type === "bot";
-
-    if (!isStreamerOfWorld && !isBot) {
-        return c.json({ error: "Forbidden" }, 403);
-    }
-    // ... existing handler logic
+// Example: Characters PUT — item fetched and authorized by middleware
+app.put("/:id", requireItemWorldWrite(tableName), async (c) => {
+    const existing = c.get("existingItem"); // already fetched and authorized
+    const updated = await c.req.json();
+    // ... S3 cleanup + write to DynamoDB
 });
 ```
+
+Env var validation (`tableName`, `bucketName`) is done at module load time with a `throw` — Lambda fails at cold start if config is missing, not per-request.
 
 ---
 

@@ -102,8 +102,8 @@ A viewer watching a stream interacts with the game by redeeming channel points o
 **Authorization & Role Enforcement**
 
 - **FR-008**: The system MUST define and enforce the following roles: **Streamer**, **Viewer**, **Bot**, and **Overlay**.
-- **FR-009**: Streamers MUST be permitted to create, read, update, and delete resources (characters, banners, materials, actions, world settings) within their own world only.
-- **FR-010**: Streamers MUST NOT be able to access or modify resources belonging to another streamer's world.
+- **FR-009**: Streamers MUST be permitted to create, read, update, and delete resources (characters, banners, materials, actions, world settings) within their own world only. The streamer's active world is encoded in their token at issuance — no worldId needs to be provided per-request for user callers.
+- **FR-010**: Streamers MUST NOT be able to access or modify resources belonging to another streamer's world. Since the token is world-scoped, cross-world access is structurally impossible for user callers.
 - **FR-011**: Viewers MUST be permitted to read and update their own PlayerWorldData within a world they participate in.
 - **FR-012**: Viewers MUST NOT be permitted to create, update, or delete world configuration resources (characters, banners, materials, actions).
 - **FR-013**: The Bot role MUST be permitted to execute game actions (apply materials, trigger actions, update PlayerWorldData) across any world it is configured to operate in.
@@ -125,7 +125,7 @@ A viewer watching a stream interacts with the game by redeeming channel points o
 - **Identity**: Represents a verified external identity (e.g., a Twitch account). Attributes: provider name, provider-specific user ID, display name, last verified timestamp. Links to a Lupworlds User.
 - **User**: A Lupworlds account. Attributes: internal ID, associated identities, assigned role, linked world ID (for streamers), creation date.
 - **Role**: Defines a category of actor (Streamer, Viewer, Bot, Overlay) and the set of permitted operations associated with it.
-- **Session / Credential**: A time-limited or revocable proof of identity presented with each API request. Attributes: issuer, subject (user or service), role, scope (world ID if applicable), expiry, revocation status.
+- **Session / Credential**: A time-limited or revocable proof of identity presented with each API request. Attributes: issuer, subject (user or service), role, scope (world ID — required for user and overlay tokens; absent for bot), expiry, revocation status. User tokens are scoped to a single world at issuance; switching active worlds requires issuing a new token.
 
 ## Success Criteria *(mandatory)*
 

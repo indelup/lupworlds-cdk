@@ -98,7 +98,7 @@ app.get("/twitch/callback", async (c) => {
             twitchId: string;
             displayName: string;
             allowedRoles: string[];
-            ownedWorldIds: string[];
+            worldId?: string;
             createdAt: string;
         };
 
@@ -119,7 +119,6 @@ app.get("/twitch/callback", async (c) => {
                 twitchId: twitchUser.id,
                 displayName: twitchUser.display_name,
                 allowedRoles: ["viewer"],
-                ownedWorldIds: [],
                 createdAt: new Date().toISOString(),
             };
             await ddbDocClient.send(
@@ -137,7 +136,7 @@ app.get("/twitch/callback", async (c) => {
             platform: "twitch",
             platformId: user.twitchId,
             roles: user.allowedRoles as AccessTokenPayload["roles"],
-            ownedWorldIds: user.ownedWorldIds,
+            worldId: user.worldId ?? "",
         };
 
         const jwt = await sign(payload as unknown as Record<string, unknown>, jwtSecret);
@@ -169,7 +168,7 @@ app.post("/overlay-token", async (c) => {
         return c.json({ error: "worldId is required" }, 400);
     }
 
-    if (!caller.ownedWorldIds.includes(worldId)) {
+    if (caller.worldId !== worldId) {
         return c.json({ error: "Forbidden" }, 403);
     }
 

@@ -23,7 +23,7 @@ const RESIZE_MAP: Record<string, { w: number; h: number }> = {
     currencies: { w: 100, h: 100 },
 };
 
-app.get("/:key+", async (c) => {
+app.get("/:key{.+}", async (c) => {
     const assetBucket = process.env.ASSET_IMAGES_BUCKET_NAME;
     const configBucket = process.env.CONFIG_IMAGES_BUCKET_NAME;
 

@@ -156,6 +156,10 @@ export class LupworldsCdkStack extends cdk.Stack {
             handler: "handler",
             runtime: lambda.Runtime.NODEJS_22_X,
             functionName: "LupworldsLambda",
+            memorySize: 512,
+            bundling: {
+                nodeModules: ["sharp"],
+            },
             environment: {
                 CHARACTERS_TABLE_NAME: charactersTable.tableName,
                 MATERIALS_TABLE_NAME: materialsTable.tableName,
@@ -182,6 +186,7 @@ export class LupworldsCdkStack extends cdk.Stack {
         new LambdaRestApi(this, "LupworldsRestAPI", {
             handler: apiLambda,
             proxy: true,
+            binaryMediaTypes: ["image/*"],
         });
     }
 }

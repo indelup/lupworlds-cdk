@@ -52,17 +52,17 @@ app.post("/", async (c) => {
     }
     try {
         const body = await c.req.json();
-        const newCharacter = {
+        const newMaterial = {
             ...body,
             id: randomUUID(),
             createdAt: new Date().toISOString(),
         };
         const command = new PutCommand({
             TableName: tableName,
-            Item: newCharacter,
+            Item: newMaterial,
         });
         await ddbDocClient.send(command);
-        return c.json(newCharacter, 201);
+        return c.json(newMaterial, 201);
     } catch (error: any) {
         console.error(error);
         return c.json({ error: error.message }, 500);
@@ -77,30 +77,30 @@ app.put("/:id", async (c) => {
         return c.json({ error: "Bucket name not configured" }, 500);
     }
 
-    const characterId = c.req.param("id");
-    if (!characterId) {
-        return c.json({ error: "Character ID is required" }, 400);
+    const materialId = c.req.param("id");
+    if (!materialId) {
+        return c.json({ error: "Material ID is required" }, 400);
     }
 
     try {
-        // Get the existing character to compare images
+        // Get the existing material to compare images
         const getCommand = new GetCommand({
             TableName: tableName,
-            Key: { id: characterId },
+            Key: { id: materialId },
         });
-        const existingCharacter = await ddbDocClient.send(getCommand);
+        const existingMaterial = await ddbDocClient.send(getCommand);
 
-        if (!existingCharacter.Item) {
-            return c.json({ error: "Character not found" }, 404);
+        if (!existingMaterial.Item) {
+            return c.json({ error: "Material not found" }, 404);
         }
 
-        const updatedCharacter = await c.req.json();
+        const updatedMaterial = await c.req.json();
 
         // Check if characterSrc or backgroundSrc have changed and delete old ones from S3
-        const oldCharacterSrc = existingCharacter.Item.characterSrc;
-        const oldBackgroundSrc = existingCharacter.Item.backgroundSrc;
-        const newCharacterSrc = updatedCharacter.characterSrc;
-        const newBackgroundSrc = updatedCharacter.backgroundSrc;
+        const oldCharacterSrc = existingMaterial.Item.characterSrc;
+        const oldBackgroundSrc = existingMaterial.Item.backgroundSrc;
+        const newCharacterSrc = updatedMaterial.characterSrc;
+        const newBackgroundSrc = updatedMaterial.backgroundSrc;
 
         // Delete old characterSrc if it changed and is not empty
         if (oldCharacterSrc && oldCharacterSrc !== newCharacterSrc) {
@@ -138,22 +138,22 @@ app.put("/:id", async (c) => {
             }
         }
 
-        // Update the character in DynamoDB
+        // Update the material in DynamoDB
         const putCommand = new PutCommand({
             TableName: tableName,
             Item: {
-                ...updatedCharacter,
-                id: characterId, // Ensure the ID remains the same
+                ...updatedMaterial,
+                id: materialId, // Ensure the ID remains the same
             },
         });
 
         await ddbDocClient.send(putCommand);
 
         return c.json({
-            message: "Character updated successfully",
-            character: {
-                ...updatedCharacter,
-                id: characterId,
+            message: "Material updated successfully",
+            material: {
+                ...updatedMaterial,
+                id: materialId,
             },
         });
     } catch (error: any) {
@@ -170,37 +170,37 @@ app.delete("/:id", async (c) => {
         return c.json({ error: "Bucket name not configured" }, 500);
     }
 
-    const characterId = c.req.param("id");
-    if (!characterId) {
-        return c.json({ error: "Character ID is required" }, 400);
+    const materialId = c.req.param("id");
+    if (!materialId) {
+        return c.json({ error: "Material ID is required" }, 400);
     }
 
     try {
-        // Get the existing character to find its images
+        // Get the existing material to find its images
         const getCommand = new GetCommand({
             TableName: tableName,
-            Key: { id: characterId },
+            Key: { id: materialId },
         });
-        const existingCharacter = await ddbDocClient.send(getCommand);
+        const existingMaterial = await ddbDocClient.send(getCommand);
 
-        if (!existingCharacter.Item) {
-            return c.json({ error: "Character not found" }, 404);
+        if (!existingMaterial.Item) {
+            return c.json({ error: "Material not found" }, 404);
         }
 
         // Delete characterSrc from S3 if it exists
-        if (existingCharacter.Item.characterSrc) {
+        if (existingMaterial.Item.characterSrc) {
             try {
                 const deleteCharacterCommand = new DeleteObjectCommand({
                     Bucket: bucketName,
-                    Key: existingCharacter.Item.characterSrc,
+                    Key: existingMaterial.Item.characterSrc,
                 });
                 await s3Client.send(deleteCharacterCommand);
                 console.log(
-                    `Deleted characterSrc: ${existingCharacter.Item.characterSrc}`,
+                    `Deleted characterSrc: ${existingMaterial.Item.characterSrc}`,
                 );
             } catch (deleteError: any) {
                 console.error(
-                    `Failed to delete characterSrc ${existingCharacter.Item.characterSrc}:`,
+                    `Failed to delete characterSrc ${existingMaterial.Item.characterSrc}:`,
                     deleteError,
                 );
                 // Continue with deletion even if image deletion fails
@@ -208,36 +208,36 @@ app.delete("/:id", async (c) => {
         }
 
         // Delete backgroundSrc from S3 if it exists
-        if (existingCharacter.Item.backgroundSrc) {
+        if (existingMaterial.Item.backgroundSrc) {
             try {
                 const deleteBackgroundCommand = new DeleteObjectCommand({
                     Bucket: bucketName,
-                    Key: existingCharacter.Item.backgroundSrc,
+                    Key: existingMaterial.Item.backgroundSrc,
                 });
                 await s3Client.send(deleteBackgroundCommand);
                 console.log(
-                    `Deleted backgroundSrc: ${existingCharacter.Item.backgroundSrc}`,
+                    `Deleted backgroundSrc: ${existingMaterial.Item.backgroundSrc}`,
                 );
             } catch (deleteError: any) {
                 console.error(
-                    `Failed to delete backgroundSrc ${existingCharacter.Item.backgroundSrc}:`,
+                    `Failed to delete backgroundSrc ${existingMaterial.Item.backgroundSrc}:`,
                     deleteError,
                 );
                 // Continue with deletion even if image deletion fails
             }
         }
 
-        // Delete the character from DynamoDB
+        // Delete the material from DynamoDB
         const deleteCommand = new DeleteCommand({
             TableName: tableName,
-            Key: { id: characterId },
+            Key: { id: materialId },
         });
 
         await ddbDocClient.send(deleteCommand);
 
         return c.json({
-            message: "Character deleted successfully",
-            deletedCharacter: existingCharacter.Item,
+            message: "Material deleted successfully",
+            deletedMaterial: existingMaterial.Item,
         });
     } catch (error: any) {
         console.error(error);

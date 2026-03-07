@@ -52,17 +52,17 @@ app.post("/", async (c) => {
     }
     try {
         const body = await c.req.json();
-        const newCharacter = {
+        const newBanner = {
             ...body,
             id: randomUUID(),
             createdAt: new Date().toISOString(),
         };
         const command = new PutCommand({
             TableName: tableName,
-            Item: newCharacter,
+            Item: newBanner,
         });
         await ddbDocClient.send(command);
-        return c.json(newCharacter, 201);
+        return c.json(newBanner, 201);
     } catch (error: any) {
         console.error(error);
         return c.json({ error: error.message }, 500);
@@ -77,53 +77,53 @@ app.put("/:id", async (c) => {
         return c.json({ error: "Bucket name not configured" }, 500);
     }
 
-    const characterId = c.req.param("id");
-    if (!characterId) {
-        return c.json({ error: "Character ID is required" }, 400);
+    const bannerId = c.req.param("id");
+    if (!bannerId) {
+        return c.json({ error: "Banner ID is required" }, 400);
     }
 
     try {
-        // Get the existing character to compare images
+        // Get the existing banner to compare images
         const getCommand = new GetCommand({
             TableName: tableName,
-            Key: { id: characterId },
+            Key: { id: bannerId },
         });
-        const existingCharacter = await ddbDocClient.send(getCommand);
+        const existingBanner = await ddbDocClient.send(getCommand);
 
-        if (!existingCharacter.Item) {
-            return c.json({ error: "Character not found" }, 404);
+        if (!existingBanner.Item) {
+            return c.json({ error: "Banner not found" }, 404);
         }
 
-        const updatedCharacter = await c.req.json();
+        const updatedBanner = await c.req.json();
 
-        // Check if characterSrc or backgroundSrc have changed and delete old ones from S3
-        const oldCharacterSrc = existingCharacter.Item.imageSrc;
-        const newCharacterSrc = updatedCharacter.imageSrc;
+        // Check if imageSrc has changed and delete old one from S3
+        const oldImageSrc = existingBanner.Item.imageSrc;
+        const newImageSrc = updatedBanner.imageSrc;
 
-        // Delete old characterSrc if it changed and is not empty
-        if (oldCharacterSrc && oldCharacterSrc !== newCharacterSrc) {
+        // Delete old imageSrc if it changed and is not empty
+        if (oldImageSrc && oldImageSrc !== newImageSrc) {
             try {
                 const deleteCommand = new DeleteObjectCommand({
                     Bucket: bucketName,
-                    Key: oldCharacterSrc,
+                    Key: oldImageSrc,
                 });
                 await s3Client.send(deleteCommand);
-                console.log(`Deleted old characterSrc: ${oldCharacterSrc}`);
+                console.log(`Deleted old imageSrc: ${oldImageSrc}`);
             } catch (deleteError: any) {
                 console.error(
-                    `Failed to delete characterSrc ${oldCharacterSrc}:`,
+                    `Failed to delete imageSrc ${oldImageSrc}:`,
                     deleteError,
                 );
                 // Continue with the update even if image deletion fails
             }
         }
 
-        // Update the character in DynamoDB
+        // Update the banner in DynamoDB
         const putCommand = new PutCommand({
             TableName: tableName,
             Item: {
-                ...updatedCharacter,
-                id: characterId, // Ensure the ID remains the same
+                ...updatedBanner,
+                id: bannerId, // Ensure the ID remains the same
             },
         });
 
@@ -131,9 +131,9 @@ app.put("/:id", async (c) => {
 
         return c.json({
             message: "Banner updated successfully",
-            character: {
-                ...updatedCharacter,
-                id: characterId,
+            banner: {
+                ...updatedBanner,
+                id: bannerId,
             },
         });
     } catch (error: any) {
@@ -150,54 +150,54 @@ app.delete("/:id", async (c) => {
         return c.json({ error: "Bucket name not configured" }, 500);
     }
 
-    const characterId = c.req.param("id");
-    if (!characterId) {
-        return c.json({ error: "Character ID is required" }, 400);
+    const bannerId = c.req.param("id");
+    if (!bannerId) {
+        return c.json({ error: "Banner ID is required" }, 400);
     }
 
     try {
-        // Get the existing character to find its images
+        // Get the existing banner to find its images
         const getCommand = new GetCommand({
             TableName: tableName,
-            Key: { id: characterId },
+            Key: { id: bannerId },
         });
-        const existingCharacter = await ddbDocClient.send(getCommand);
+        const existingBanner = await ddbDocClient.send(getCommand);
 
-        if (!existingCharacter.Item) {
-            return c.json({ error: "Character not found" }, 404);
+        if (!existingBanner.Item) {
+            return c.json({ error: "Banner not found" }, 404);
         }
 
-        // Delete characterSrc from S3 if it exists
-        if (existingCharacter.Item.imageSrc) {
+        // Delete imageSrc from S3 if it exists
+        if (existingBanner.Item.imageSrc) {
             try {
-                const deleteCharacterCommand = new DeleteObjectCommand({
+                const deleteImageCommand = new DeleteObjectCommand({
                     Bucket: bucketName,
-                    Key: existingCharacter.Item.imageSrc,
+                    Key: existingBanner.Item.imageSrc,
                 });
-                await s3Client.send(deleteCharacterCommand);
+                await s3Client.send(deleteImageCommand);
                 console.log(
-                    `Deleted characterSrc: ${existingCharacter.Item.imageSrc}`,
+                    `Deleted imageSrc: ${existingBanner.Item.imageSrc}`,
                 );
             } catch (deleteError: any) {
                 console.error(
-                    `Failed to delete characterSrc ${existingCharacter.Item.imageSrc}:`,
+                    `Failed to delete imageSrc ${existingBanner.Item.imageSrc}:`,
                     deleteError,
                 );
                 // Continue with deletion even if image deletion fails
             }
         }
 
-        // Delete the character from DynamoDB
+        // Delete the banner from DynamoDB
         const deleteCommand = new DeleteCommand({
             TableName: tableName,
-            Key: { id: characterId },
+            Key: { id: bannerId },
         });
 
         await ddbDocClient.send(deleteCommand);
 
         return c.json({
-            message: "Character deleted successfully",
-            deletedCharacter: existingCharacter.Item,
+            message: "Banner deleted successfully",
+            deletedBanner: existingBanner.Item,
         });
     } catch (error: any) {
         console.error(error);

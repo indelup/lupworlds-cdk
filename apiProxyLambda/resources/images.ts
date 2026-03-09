@@ -3,8 +3,10 @@ import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { randomUUID } from "crypto";
 import sharp from "sharp";
+import { requireNotOverlay } from "../middleware/authorization";
+import type { AppEnv } from "../types/auth";
 
-const app = new Hono();
+const app = new Hono<AppEnv>();
 const s3Client = new S3Client({});
 
 const ASSET_PREFIXES = ["characters", "materials", "actions"] as const;
@@ -96,7 +98,7 @@ app.get("/:key{.+}", async (c) => {
     });
 });
 
-app.post("/get-presigned-url", async (c) => {
+app.post("/get-presigned-url", requireNotOverlay, async (c) => {
     const assetBucket = process.env.ASSET_IMAGES_BUCKET_NAME;
     const configBucket = process.env.CONFIG_IMAGES_BUCKET_NAME;
 

@@ -11,7 +11,7 @@ import type {
 
 export const authMiddleware: MiddlewareHandler<AppEnv> = async (c, next) => {
     // Skip auth for the Twitch OAuth callback
-    if (c.req.method === "GET" && c.req.path.endsWith("/auth/twitch/callback")) {
+    if (c.req.method === "GET" && c.req.path === "/auth/twitch/callback") {
         return next();
     }
 

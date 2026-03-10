@@ -66,6 +66,9 @@ export const authMiddleware: MiddlewareHandler<AppEnv> = async (c, next) => {
         }
         case "service": {
             const p = payload as unknown as ServiceTokenPayload;
+            if (payload.aud !== "api") {
+                return c.json({ error: "Unauthorized" }, 401);
+            }
             caller = {
                 type: "bot",
                 scopes: p.scopes,

@@ -91,6 +91,10 @@ export function requireItemWorldWrite(
     return async (c, next) => {
         const caller = c.get("caller");
 
+        if (caller.type === "overlay") {
+            return c.json({ error: "Forbidden" }, 403);
+        }
+
         const itemId = c.req.param(param);
         if (!itemId) {
             return c.json({ error: "ID is required" }, 400);
@@ -102,10 +106,6 @@ export function requireItemWorldWrite(
 
         if (!result.Item) {
             return c.json({ error: "Not found" }, 404);
-        }
-
-        if (caller.type === "overlay") {
-            return c.json({ error: "Forbidden" }, 403);
         }
 
         if (caller.type === "user" && caller.worldId !== result.Item.worldId) {

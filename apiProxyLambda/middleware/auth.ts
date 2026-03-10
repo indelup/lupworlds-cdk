@@ -39,6 +39,9 @@ export const authMiddleware: MiddlewareHandler<AppEnv> = async (c, next) => {
     switch (payload.typ) {
         case "access": {
             const p = payload as unknown as AccessTokenPayload;
+            if (payload.aud !== "api") {
+                return c.json({ error: "Unauthorized" }, 401);
+            }
             caller = {
                 type: "user",
                 userId: p.sub,

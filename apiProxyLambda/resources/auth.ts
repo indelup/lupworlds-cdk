@@ -91,9 +91,6 @@ app.get("/twitch/callback", async (c) => {
             await ddbDocClient.send(
                 new PutCommand({ TableName: usersTableName, Item: user }),
             );
-        } else {
-            // Update display name on each login
-            user.displayName = twitchUser.display_name;
         }
 
         const jwtSecret = await getJwtSecret();

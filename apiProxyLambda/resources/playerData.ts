@@ -5,8 +5,10 @@ import {
     GetCommand,
     PutCommand,
 } from "@aws-sdk/lib-dynamodb";
+import { requireSelfDataWrite } from "../middleware/authorization";
+import type { AppEnv } from "../types/auth";
 
-const app = new Hono();
+const app = new Hono<AppEnv>();
 
 const dbClient = new DynamoDBClient({});
 const ddbDocClient = DynamoDBDocumentClient.from(dbClient);
@@ -42,7 +44,7 @@ app.get("/:userId/:worldId", async (c) => {
 
 // PUT /player-data/:userId/:worldId
 // Upserts the full PlayerWorldData for a viewer in a world.
-app.put("/:userId/:worldId", async (c) => {
+app.put("/:userId/:worldId", requireSelfDataWrite("userId"), async (c) => {
     if (!tableName) {
         return c.json({ error: "Table name not configured" }, 500);
     }

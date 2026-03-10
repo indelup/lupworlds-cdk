@@ -64,6 +64,26 @@ export function requireWorldWrite(param: string): MiddlewareHandler<AppEnv> {
     };
 }
 
+export function requireSelfDataWrite(param: string): MiddlewareHandler<AppEnv> {
+    return async (c, next) => {
+        const caller = c.get("caller");
+
+        if (caller.type === "overlay") {
+            return c.json({ error: "Forbidden" }, 403);
+        }
+        if (caller.type === "bot") {
+            return next();
+        }
+
+        // user: userId in URL param must match token's userId
+        const paramValue = c.req.param(param);
+        if (caller.userId !== paramValue) {
+            return c.json({ error: "Forbidden" }, 403);
+        }
+        return next();
+    };
+}
+
 export function requireItemWorldWrite(
     tableName: string,
     param: string,

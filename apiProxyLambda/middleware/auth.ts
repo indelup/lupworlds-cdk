@@ -5,13 +5,12 @@ import type {
     AppEnv,
     AccessTokenPayload,
     OverlayTokenPayload,
-    ServiceTokenPayload,
     CallerContext,
 } from "../types/auth";
 
 export const authMiddleware: MiddlewareHandler<AppEnv> = async (c, next) => {
-    // Skip auth for the Twitch OAuth callback
-    if (c.req.method === "GET" && c.req.path === "/auth/twitch/callback") {
+    // Skip auth for the Twitch login endpoint
+    if (c.req.method === "POST" && c.req.path === "/auth/twitch/login") {
         return next();
     }
 
@@ -60,18 +59,15 @@ export const authMiddleware: MiddlewareHandler<AppEnv> = async (c, next) => {
             caller = {
                 type: "overlay",
                 wid: p.wid,
-                scopes: p.scopes,
             };
             break;
         }
         case "service": {
-            const p = payload as unknown as ServiceTokenPayload;
             if (payload.aud !== "api") {
                 return c.json({ error: "Unauthorized" }, 401);
             }
             caller = {
                 type: "bot",
-                scopes: p.scopes,
             };
             break;
         }

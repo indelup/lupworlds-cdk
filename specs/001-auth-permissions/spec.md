@@ -91,7 +91,7 @@ A viewer watching a stream interacts with the game by redeeming channel points o
 
 **Authentication**
 
-- **FR-001**: The system MUST allow streamers to authenticate using their Twitch account via the standard OAuth2 authorization code flow.
+- **FR-001**: The system MUST allow streamers to authenticate using their Twitch account. The frontend obtains the Twitch access token independently and submits it to the backend, which validates it against the Twitch API to confirm the user's identity.
 - **FR-002**: Upon successful Twitch authentication, the system MUST create or update the corresponding user record, associating the Twitch identity with the Lupworlds account.
 - **FR-003**: The system MUST issue a session credential to authenticated streamers that is used for all subsequent API requests.
 - **FR-004**: The system MUST support issuing pre-shared service credentials to internal services (bot) that are distinct from user-facing credentials.

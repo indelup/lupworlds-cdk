@@ -45,11 +45,11 @@
 
 **Goal**: A streamer completes the Twitch OAuth2 flow and receives a Lupworlds JWT. All their world management routes accept that JWT and enforce world-ownership.
 
-**Independent Test**: Visit the Twitch OAuth URL, approve, land on `FRONTEND_URL?token=<jwt>`, decode the JWT and confirm `typ: "access"`, `roles: ["streamer"]`, `ownedWorldIds`. Then call `GET /characters?worldId=<ownedId>` with the token — 200. Call with another worldId — 403.
+**Independent Test**: Obtain a Twitch access token via the frontend OAuth flow. Call `POST /auth/twitch/login` with `{ "accessToken": "<twitch-token>" }` → receive `{ token: "<lupworlds-jwt>" }`. Decode the JWT and confirm `typ: "access"`, `roles: ["streamer"]`, `worldId`. Then call `GET /characters?worldId=<ownedId>` with the token — 200. Call with another worldId — 403.
 
 ### Implementation for User Story 1
 
-- [x] T009 [US1] Implement `GET /auth/twitch/callback` in `apiProxyLambda/resources/auth.ts`: exchange `?code` for a Twitch access token (`POST https://id.twitch.tv/oauth2/token`), fetch user info (`GET https://api.twitch.tv/helix/users`), find-or-create `User` record via `TwitchIdIndex` in DynamoDB, sign `AccessTokenPayload` with `hono/jwt`, redirect to `{FRONTEND_URL}?token=<jwt>`
+- [x] T009 [US1] Implement `POST /auth/twitch/login` in `apiProxyLambda/resources/auth.ts`: receive `{ accessToken }` from body, validate by calling `GET https://api.twitch.tv/helix/users` with the provided token, find-or-create `User` record via `TwitchIdIndex` in DynamoDB, sign `AccessTokenPayload` with `hono/jwt`, return `{ token: <jwt> }`. No code exchange, no redirect.
 - [x] T010 [US1] Apply authorization middleware to `apiProxyLambda/resources/characters.ts`: POST uses `resolveWorldId`, PUT/DELETE use `requireItemWorldWrite(tableName)`, presigned-url uses `requireNotOverlay`. Handlers are authorization-free. Env var validation at module startup.
 - [x] T011 [P] [US1] Apply authorization middleware to `apiProxyLambda/resources/materials.ts` (same pattern as T010)
 - [x] T012 [P] [US1] Apply authorization middleware to `apiProxyLambda/resources/actions.ts` (same pattern as T010)
@@ -209,6 +209,6 @@ With multiple developers:
 - [P] tasks operate on different files — no merge conflicts
 - Each user story phase ends with an independent checkpoint that can be deployed and demoed
 - Secrets (JWT secret, bot JWT, Twitch client secret) must be provisioned in SSM before any local or deployed testing
-- The auth middleware skip-list contains only `GET /auth/twitch/callback` — all other routes must be authenticated
+- The auth middleware skip-list contains only `POST /auth/twitch/login` — all other routes must be authenticated
 - `hono/jwt` `verify()` omits expiry check when `exp` is absent — non-expiring tokens require no workaround
 - Bot JWT is a pre-generated signed JWT stored in SSM (not a raw API key); the middleware validates it identically to user tokens

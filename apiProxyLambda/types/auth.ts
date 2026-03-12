@@ -1,5 +1,4 @@
 export type Role = "streamer" | "viewer" | "bot" | "overlay";
-export type OverlayScope = "world:read" | "playerdata:read";
 
 export interface AccessTokenPayload {
     iss: "lupworlds";
@@ -10,7 +9,6 @@ export interface AccessTokenPayload {
     platform: string;
     platformId: string;
     roles: Role[];
-    ownedWorldIds: string[];
     worldId: string;
 }
 
@@ -19,7 +17,6 @@ export interface OverlayTokenPayload {
     aud: "overlay";
     typ: "overlay";
     wid: string;
-    scopes: OverlayScope[];
     iat: number;
 }
 
@@ -28,7 +25,6 @@ export interface ServiceTokenPayload {
     aud: "api";
     typ: "service";
     sub: "bot";
-    scopes: ["bot:*"];
     iat: number;
 }
 
@@ -44,11 +40,9 @@ export type CallerContext =
     | {
           type: "overlay";
           wid: string;
-          scopes: OverlayScope[];
       }
     | {
           type: "bot";
-          scopes: ["bot:*"];
       };
 
 export interface TwitchUserInfo {

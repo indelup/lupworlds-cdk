@@ -85,7 +85,7 @@ package.json                          MODIFY — add @aws-sdk/client-ssm
 
 ### auth middleware (`middleware/auth.ts`) — Authentication only
 
-Runs on every request except `GET /auth/twitch/callback`.
+Runs on every request except `POST /auth/twitch/login`.
 
 ```
 1. Extract Authorization header → strip "Bearer " prefix → 401 if missing
@@ -144,16 +144,18 @@ Bot always sends worldId in body/item — it has god access and operates across 
 
 ### auth resource (`resources/auth.ts`)
 
-**GET /auth/twitch/callback**:
+**POST /auth/twitch/login** (public):
 ```
-1. Read ?code from query
-2. POST https://id.twitch.tv/oauth2/token (exchange code)
-3. GET https://api.twitch.tv/helix/users (fetch twitchId + displayName)
-4. DynamoDB: QueryCommand on TwitchIdIndex (find existing user)
-5. If not found: PutCommand (create new user, id=randomUUID, allowedRoles=["viewer"], ownedWorldIds=[])
-6. sign(jwtPayload, jwtSecret) → non-expiring JWT
-7. Redirect to FRONTEND_URL?token=<jwt>
+1. Read body.accessToken (Twitch access token obtained by the frontend)
+2. GET https://api.twitch.tv/helix/users with Authorization: Bearer <accessToken> + Client-Id header
+   → validates token is real; extracts twitchId + displayName
+3. DynamoDB: QueryCommand on TwitchIdIndex (find existing user)
+4. If not found: PutCommand (create new user, id=randomUUID, allowedRoles=["viewer"], ownedWorldIds=[])
+5. sign(jwtPayload, jwtSecret) → non-expiring JWT
+6. Return { token: <jwt> }
 ```
+
+No code exchange, no client secret, no redirect. The backend never handles the OAuth redirect — that's entirely the frontend's responsibility.
 
 **POST /auth/overlay-token** (protected, streamer only):
 ```
@@ -175,11 +177,10 @@ apiLambda.addToRolePolicy(new iam.PolicyStatement({
 
 // Non-sensitive env vars
 apiLambda.addEnvironment("TWITCH_CLIENT_ID", "<value>");
-apiLambda.addEnvironment("TWITCH_REDIRECT_URI", "<value>");
-apiLambda.addEnvironment("FRONTEND_URL", "<value>");
 apiLambda.addEnvironment("JWT_SECRET_PARAM_NAME", "/lupworlds/jwt/secret");
-apiLambda.addEnvironment("BOT_API_KEY_PARAM_NAME", "/lupworlds/bot/api-key");
-apiLambda.addEnvironment("TWITCH_CLIENT_SECRET_PARAM_NAME", "/lupworlds/twitch/client-secret");
+apiLambda.addEnvironment("BOT_JWT_PARAM_NAME", "/lupworlds/bot/jwt");
+// TWITCH_REDIRECT_URI and TWITCH_CLIENT_SECRET_PARAM_NAME are NOT needed —
+// the frontend handles the OAuth redirect; the backend only validates the token.
 ```
 
 ### RBAC in existing resource handlers

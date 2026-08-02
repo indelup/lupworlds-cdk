@@ -3,8 +3,10 @@ import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { randomUUID } from "crypto";
 import sharp from "sharp";
+import { resolveWorldId } from "../middleware/authorization";
+import type { AppEnv } from "../types/auth";
 
-const app = new Hono();
+const app = new Hono<AppEnv>();
 const s3Client = new S3Client({});
 
 const ASSET_PREFIXES = ["characters", "materials", "actions"] as const;
@@ -50,7 +52,7 @@ app.get("/:key{.+}", async (c) => {
             new GetObjectCommand({ Bucket: sourceBucket, Key: cachedKey }),
         );
         const bytes = await cached.Body!.transformToByteArray();
-        return new Response(bytes, {
+        return new Response(Buffer.from(bytes), {
             headers: { "Content-Type": "image/jpeg", "Cache-Control": "public, max-age=31536000" },
         });
     } catch (e: any) {
@@ -91,12 +93,12 @@ app.get("/:key{.+}", async (c) => {
         console.error("Cache write error:", e);
     }
 
-    return new Response(resized, {
+    return new Response(Buffer.from(resized), {
         headers: { "Content-Type": "image/jpeg", "Cache-Control": "public, max-age=31536000" },
     });
 });
 
-app.post("/get-presigned-url", async (c) => {
+app.post("/get-presigned-url", resolveWorldId, async (c) => {
     const assetBucket = process.env.ASSET_IMAGES_BUCKET_NAME;
     const configBucket = process.env.CONFIG_IMAGES_BUCKET_NAME;
 
@@ -105,11 +107,12 @@ app.post("/get-presigned-url", async (c) => {
     }
 
     try {
-        const { fileName, contentType, prefix, worldId } = await c.req.json();
+        const worldId = c.get("worldId");
+        const { fileName, contentType, prefix } = await c.req.json();
 
-        if (!fileName || !contentType || !prefix || !worldId) {
+        if (!fileName || !contentType || !prefix) {
             return c.json(
-                { error: "fileName, contentType, prefix, and worldId are required" },
+                { error: "fileName, contentType, and prefix are required" },
                 400,
             );
         }

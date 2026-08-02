@@ -1,6 +1,8 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { handle } from "hono/aws-lambda";
+import { authMiddleware } from "./middleware/auth";
+import auth from "./resources/auth";
 import users from "./resources/users";
 import characters from "./resources/characters";
 import materials from "./resources/materials";
@@ -9,8 +11,9 @@ import banners from "./resources/banners";
 import playerData from "./resources/playerData";
 import worlds from "./resources/worlds";
 import images from "./resources/images";
+import type { AppEnv } from "./types/auth";
 
-const app = new Hono();
+const app = new Hono<AppEnv>();
 
 app.use(
     "/*",
@@ -24,6 +27,9 @@ app.use(
     }),
 );
 
+app.use("/*", authMiddleware);
+
+app.route("/auth", auth);
 app.route("/users", users);
 app.route("/characters", characters);
 app.route("/materials", materials);

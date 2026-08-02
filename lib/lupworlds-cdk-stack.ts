@@ -1,6 +1,7 @@
 import * as cdk from "aws-cdk-lib";
 import { Construct } from "constructs";
 import * as lambda from "aws-cdk-lib/aws-lambda";
+import * as iam from "aws-cdk-lib/aws-iam";
 import { NodejsFunction } from "aws-cdk-lib/aws-lambda-nodejs";
 import { LambdaRestApi } from "aws-cdk-lib/aws-apigateway";
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
@@ -171,8 +172,23 @@ export class LupworldsCdkStack extends cdk.Stack {
                 WORLDS_TABLE_NAME: worldsTable.tableName,
                 ASSET_IMAGES_BUCKET_NAME: assetImagesBucket.bucketName,
                 CONFIG_IMAGES_BUCKET_NAME: configImagesBucket.bucketName,
+                TWITCH_CLIENT_ID: process.env.TWITCH_CLIENT_ID ?? "",
+                TWITCH_REDIRECT_URI: process.env.TWITCH_REDIRECT_URI ?? "",
+                FRONTEND_URL: process.env.FRONTEND_URL ?? "",
+                JWT_SECRET_PARAM_NAME: "/lupworlds/jwt/secret",
+                BOT_JWT_PARAM_NAME: "/lupworlds/bot/jwt",
+                TWITCH_CLIENT_SECRET_PARAM_NAME: "/lupworlds/twitch/client-secret",
             },
         });
+
+        apiLambda.addToRolePolicy(
+            new iam.PolicyStatement({
+                actions: ["ssm:GetParameter"],
+                resources: [
+                    `arn:aws:ssm:${this.region}:${this.account}:parameter/lupworlds/*`,
+                ],
+            }),
+        );
 
         usersTable.grantReadWriteData(apiLambda);
         charactersTable.grantReadWriteData(apiLambda);

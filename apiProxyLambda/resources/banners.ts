@@ -9,20 +9,20 @@ import {
 } from "@aws-sdk/lib-dynamodb";
 import { S3Client, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { randomUUID } from "crypto";
+import { resolveWorldId, requireItemWorldWrite } from "../middleware/authorization";
+import type { AppEnv } from "../types/auth";
 
-const app = new Hono();
+
+const app = new Hono<AppEnv>();
 
 const dbClient = new DynamoDBClient({});
 const ddbDocClient = DynamoDBDocumentClient.from(dbClient);
-const tableName = process.env.BANNERS_TABLE_NAME;
-const bucketName = process.env.CONFIG_IMAGES_BUCKET_NAME;
+const env = (k: string) => { const v = process.env[k]; if (!v) throw new Error("Missing required environment configuration"); return v; };
+const tableName = env("BANNERS_TABLE_NAME");
+const bucketName = env("CONFIG_IMAGES_BUCKET_NAME");
 const s3Client = new S3Client({});
 
 app.get("/", async (c) => {
-    if (!tableName) {
-        return c.json({ error: "Table name not configured" }, 500);
-    }
-
     const worldId = c.req.query("worldId");
 
     if (!worldId) {
@@ -46,14 +46,13 @@ app.get("/", async (c) => {
     }
 });
 
-app.post("/", async (c) => {
-    if (!tableName) {
-        return c.json({ error: "Table name not configured" }, 500);
-    }
+app.post("/", resolveWorldId, async (c) => {
     try {
+        const worldId = c.get("worldId");
         const body = await c.req.json();
         const newBanner = {
             ...body,
+            worldId,
             id: randomUUID(),
             createdAt: new Date().toISOString(),
         };
@@ -69,31 +68,11 @@ app.post("/", async (c) => {
     }
 });
 
-app.put("/:id", async (c) => {
-    if (!tableName) {
-        return c.json({ error: "Table name not configured" }, 500);
-    }
-    if (!bucketName) {
-        return c.json({ error: "Bucket name not configured" }, 500);
-    }
-
+app.put("/:id", requireItemWorldWrite(tableName, "id"), async (c) => {
     const bannerId = c.req.param("id");
-    if (!bannerId) {
-        return c.json({ error: "Banner ID is required" }, 400);
-    }
+    const existingBanner = { Item: c.get("existingItem") as any };
 
     try {
-        // Get the existing banner to compare images
-        const getCommand = new GetCommand({
-            TableName: tableName,
-            Key: { id: bannerId },
-        });
-        const existingBanner = await ddbDocClient.send(getCommand);
-
-        if (!existingBanner.Item) {
-            return c.json({ error: "Banner not found" }, 404);
-        }
-
         const updatedBanner = await c.req.json();
 
         // Check if imageSrc has changed and delete old one from S3
@@ -142,30 +121,11 @@ app.put("/:id", async (c) => {
     }
 });
 
-app.delete("/:id", async (c) => {
-    if (!tableName) {
-        return c.json({ error: "Table name not configured" }, 500);
-    }
-    if (!bucketName) {
-        return c.json({ error: "Bucket name not configured" }, 500);
-    }
-
+app.delete("/:id", requireItemWorldWrite(tableName, "id"), async (c) => {
     const bannerId = c.req.param("id");
-    if (!bannerId) {
-        return c.json({ error: "Banner ID is required" }, 400);
-    }
+    const existingBanner = { Item: c.get("existingItem") as any };
 
     try {
-        // Get the existing banner to find its images
-        const getCommand = new GetCommand({
-            TableName: tableName,
-            Key: { id: bannerId },
-        });
-        const existingBanner = await ddbDocClient.send(getCommand);
-
-        if (!existingBanner.Item) {
-            return c.json({ error: "Banner not found" }, 404);
-        }
 
         // Delete imageSrc from S3 if it exists
         if (existingBanner.Item.imageSrc) {

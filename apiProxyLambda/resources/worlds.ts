@@ -6,20 +6,20 @@ import {
     GetCommand,
 } from "@aws-sdk/lib-dynamodb";
 import { S3Client, DeleteObjectCommand } from "@aws-sdk/client-s3";
+import { requireWorldWrite } from "../middleware/authorization";
+import type { AppEnv } from "../types/auth";
 
-const app = new Hono();
+
+const app = new Hono<AppEnv>();
 
 const dbClient = new DynamoDBClient({});
 const ddbDocClient = DynamoDBDocumentClient.from(dbClient);
-const tableName = process.env.WORLDS_TABLE_NAME;
-const bucketName = process.env.CONFIG_IMAGES_BUCKET_NAME;
+const env = (k: string) => { const v = process.env[k]; if (!v) throw new Error("Missing required environment configuration"); return v; };
+const tableName = env("WORLDS_TABLE_NAME");
+const bucketName = env("CONFIG_IMAGES_BUCKET_NAME");
 const s3Client = new S3Client({});
 
 app.get("/:id", async (c) => {
-    if (!tableName) {
-        return c.json({ error: "Table name not configured" }, 500);
-    }
-
     const worldId = c.req.param("id");
 
     try {
@@ -41,14 +41,7 @@ app.get("/:id", async (c) => {
 });
 
 // Upsert — creates or updates a world
-app.put("/:id", async (c) => {
-    if (!tableName) {
-        return c.json({ error: "Table name not configured" }, 500);
-    }
-    if (!bucketName) {
-        return c.json({ error: "Bucket name not configured" }, 500);
-    }
-
+app.put("/:id", requireWorldWrite("id"), async (c) => {
     const worldId = c.req.param("id");
 
     try {

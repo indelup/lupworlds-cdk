@@ -6,19 +6,28 @@ import {
     PutCommand,
 } from "@aws-sdk/lib-dynamodb";
 import { randomUUID } from "crypto";
+import type { AppEnv } from "../types/auth";
 
-const app = new Hono();
+
+const app = new Hono<AppEnv>();
 
 const dbClient = new DynamoDBClient({});
 const ddbDocClient = DynamoDBDocumentClient.from(dbClient);
-const tableName = process.env.USERS_TABLE_NAME;
+const env = (k: string) => { const v = process.env[k]; if (!v) throw new Error("Missing required environment configuration"); return v; };
+const tableName = env("USERS_TABLE_NAME");
 
-// Fetch a user from the twitch id
+// Fetch a user from the twitch id — allowed only for self or bot
 app.get("/:twitchId", async (c) => {
-    if (!tableName) {
-        return c.json({ error: "Table name not configured" }, 500);
-    }
+    const caller = c.get("caller");
     const twitchId = c.req.param("twitchId");
+
+    if (
+        caller.type !== "bot" &&
+        !(caller.type === "user" && caller.platformId === twitchId)
+    ) {
+        return c.json({ error: "Forbidden" }, 403);
+    }
+
     try {
         const command = new QueryCommand({
             TableName: tableName,
@@ -40,11 +49,11 @@ app.get("/:twitchId", async (c) => {
     }
 });
 
-// Creates a new User
-// TODO: This should validate that the user is correctly logged in with twitch in the frontend
+// Creates a new User — bot only (user creation handled via /auth/twitch/callback)
 app.post("/", async (c) => {
-    if (!tableName) {
-        return c.json({ error: "Table name not configured" }, 500);
+    const caller = c.get("caller");
+    if (caller.type !== "bot") {
+        return c.json({ error: "Forbidden" }, 403);
     }
     try {
         const body = await c.req.json();
